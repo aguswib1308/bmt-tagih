@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, render_template, redirect, url_for
+﻿from flask import Flask, request, jsonify, session, render_template, redirect, url_for
 import sqlite3
 import hashlib
 import requests
@@ -9,15 +9,15 @@ from functools import wraps
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "koperasi_bmt_secret_2026_ganti_ini")
 
-# ── Auto-create folder data/ saat pertama jalan ───────────────
+# â”€â”€ Auto-create folder data/ saat pertama jalan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 os.makedirs("data", exist_ok=True)
 
 DB_PATH = "data/koperasi.db"
 
-# ── Fonnte Config ─────────────────────────────────────────────
+# â”€â”€ Fonnte Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FONNTE_TOKEN = os.environ.get("FONNTE_TOKEN", "")
 
-# ── Helper ────────────────────────────────────────────────────
+# â”€â”€ Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -47,7 +47,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ── Kirim WA via Fonnte ───────────────────────────────────────
+# â”€â”€ Kirim WA via Fonnte â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def kirim_wa(no_hp, pesan):
     if not FONNTE_TOKEN:
         return {"status": "skip", "reason": "FONNTE_TOKEN belum diset"}
@@ -66,36 +66,36 @@ def kirim_wa(no_hp, pesan):
         return {"error": str(e)}
 
 def pesan_tagihan(nasabah_nama, total, jatuh_tempo, marketing_nama):
-    return f"""Assalamu'alaikum, {nasabah_nama} 🙏
+    return f"""Assalamu'alaikum, {nasabah_nama} ðŸ™
 
 Kami dari *KSPPS BMT Amal Muslim Wonogiri* ingin mengingatkan tagihan Anda:
 
-💰 *Total Tagihan:* {format_rp(total)}
-📅 *Jatuh Tempo:* tanggal {jatuh_tempo}
-👤 *Marketing:* {marketing_nama}
+ðŸ’° *Total Tagihan:* {format_rp(total)}
+ðŸ“… *Jatuh Tempo:* tanggal {jatuh_tempo}
+ðŸ‘¤ *Marketing:* {marketing_nama}
 
-Mohon segera melakukan pembayaran. Terima kasih 🙏
+Mohon segera melakukan pembayaran. Terima kasih ðŸ™
 
 _Pesan otomatis - Jangan dibalas_"""
 
 def pesan_lunas(nasabah_nama, jumlah, marketing_nama):
-    return f"""Assalamu'alaikum, {nasabah_nama} 🙏
+    return f"""Assalamu'alaikum, {nasabah_nama} ðŸ™
 
-✅ Pembayaran Anda telah *berhasil dicatat*!
+âœ… Pembayaran Anda telah *berhasil dicatat*!
 
-💰 *Jumlah Bayar:* {format_rp(jumlah)}
-📅 *Tanggal:* {datetime.now().strftime('%d/%m/%Y %H:%M')}
-👤 *Marketing:* {marketing_nama}
+ðŸ’° *Jumlah Bayar:* {format_rp(jumlah)}
+ðŸ“… *Tanggal:* {datetime.now().strftime('%d/%m/%Y %H:%M')}
+ðŸ‘¤ *Marketing:* {marketing_nama}
 
-Terima kasih atas kepercayaan Anda 🙏
+Terima kasih atas kepercayaan Anda ðŸ™
 *KSPPS BMT Amal Muslim Wonogiri*"""
 
-# ── Health Check (Railway butuh ini) ─────────────────────────
+# â”€â”€ Health Check (Railway butuh ini) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "time": datetime.now().isoformat()})
 
-# ── AUTH ──────────────────────────────────────────────────────
+# â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
@@ -141,7 +141,7 @@ def me():
         "marketing_id": session.get("marketing_id")
     })
 
-# ── DASHBOARD ─────────────────────────────────────────────────
+# â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/dashboard")
 @login_required
 def dashboard():
@@ -192,7 +192,7 @@ def dashboard():
         "bulan": bulan
     })
 
-# ── TAGIHAN LIST ──────────────────────────────────────────────
+# â”€â”€ TAGIHAN LIST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/tagihan")
 @login_required
 def list_tagihan():
@@ -212,10 +212,10 @@ def list_tagihan():
     if status:
         where.append("t.status=?")
         params.append(status)
-	kolek = request.args.get("kolek", "")
-	if kolek:
-    	where.append("t.kolektibilitas=?")
-    	params.append(int(kolek))
+    kolek = request.args.get("kolek", "")
+    if kolek:
+        where.append("t.kolektibilitas=?")
+        params.append(int(kolek))
     if search:
         where.append("(n.nama LIKE ? OR n.no_rekening LIKE ?)")
         params += [f"%{search}%", f"%{search}%"]
@@ -247,7 +247,7 @@ def list_tagihan():
         "offset": offset
     })
 
-# ── CATAT PEMBAYARAN ──────────────────────────────────────────
+# â”€â”€ CATAT PEMBAYARAN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/bayar", methods=["POST"])
 @login_required
 def bayar():
@@ -300,7 +300,7 @@ def bayar():
         "message": f"Pembayaran {row['nama']} berhasil dicatat"
     })
 
-# ── REMINDER WA INDIVIDUAL ────────────────────────────────────
+# â”€â”€ REMINDER WA INDIVIDUAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/reminder/<int:tagihan_id>", methods=["POST"])
 @login_required
 def kirim_reminder(tagihan_id):
@@ -321,7 +321,7 @@ def kirim_reminder(tagihan_id):
     result = kirim_wa(row["no_hp"], pesan)
     return jsonify({"success": True, "wa_result": result})
 
-# ── BLAST REMINDER ────────────────────────────────────────────
+# â”€â”€ BLAST REMINDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/reminder/blast", methods=["POST"])
 @admin_required
 def blast_reminder():
@@ -354,7 +354,7 @@ def blast_reminder():
 
     return jsonify({"success": True, "terkirim": terkirim, "gagal": gagal})
 
-# ── UPDATE NO HP ──────────────────────────────────────────────
+# â”€â”€ UPDATE NO HP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/nasabah/<no_rek>/hp", methods=["PUT"])
 @login_required
 def update_hp(no_rek):
@@ -366,7 +366,7 @@ def update_hp(no_rek):
     conn.close()
     return jsonify({"success": True})
 
-# ── HISTORI PEMBAYARAN ────────────────────────────────────────
+# â”€â”€ HISTORI PEMBAYARAN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/histori")
 @login_required
 def histori():
@@ -390,7 +390,7 @@ def histori():
     conn.close()
     return jsonify([dict(r) for r in rows])
 
-# ── IMPORT EXCEL ──────────────────────────────────────────────
+# â”€â”€ IMPORT EXCEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/import", methods=["POST"])
 @admin_required
 def import_excel_route():
@@ -409,7 +409,7 @@ def import_excel_route():
         pass
     return jsonify(result)
 
-# ── HISTORI IMPORT ────────────────────────────────────────────
+# â”€â”€ HISTORI IMPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/import/log")
 @admin_required
 def import_log():
@@ -422,22 +422,23 @@ def import_log():
     conn.close()
     return jsonify([dict(r) for r in rows])
 
-# ── SERVE FRONTEND ────────────────────────────────────────────
+# â”€â”€ SERVE FRONTEND â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/")
 @app.route("/<path:path>")
 def index(path=""):
     return render_template("index.html")
 
-# ── STARTUP: init DB kalau belum ada ─────────────────────────
+# â”€â”€ STARTUP: init DB kalau belum ada â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def startup():
     if not os.path.exists(DB_PATH):
-        print("🔧 Database belum ada, menjalankan init_db...")
+        print("ðŸ”§ Database belum ada, menjalankan init_db...")
         from init_db import init_db
         init_db()
     else:
-        print("✅ Database ditemukan, skip init.")
+        print("âœ… Database ditemukan, skip init.")
 
 startup()
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
