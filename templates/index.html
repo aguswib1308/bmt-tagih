@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>BMT Amal Muslim Wonogiri</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#1a5276"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --primary:       #1a5276;
+      --primary-light: #2471a3;
+      --primary-pale:  #d6eaf8;
+      --green-dark:    #1e8449;
+      --green-mid:     #27ae60;
+      --green-pale:    #d5f5e3;
+      --red-dark:      #c0392b;
+      --red-pale:      #fadbd8;
+      --yellow-dark:   #d68910;
+      --yellow-pale:   #fef9e7;
+      --gray-900:      #1a1a2e;
+      --gray-700:      #374151;
+      --gray-600:      #4b5563;
+      --gray-400:      #9ca3af;
+      --gray-200:      #e5e7eb;
+      --gray-100:      #f3f4f6;
+      --white:         #ffffff;
+      --radius:        14px;
+      --radius-sm:     8px;
+      --shadow:        0 2px 12px rgba(0,0,0,0.08);
+      --shadow-md:     0 4px 24px rgba(0,0,0,0.13);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-700);
+      min-height: 100vh;
+      max-width: 480px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    /* ── LOGIN ── */
+    #loginScreen {
+      min-height: 100vh;
+      background: linear-gradient(160deg, var(--primary) 0%, var(--primary-light) 60%, #5dade2 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+    }
+    .login-logo {
+      width: 72px; height: 72px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; margin-bottom: 16px;
+      backdrop-filter: blur(8px);
+      border: 1.5px solid rgba(255,255,255,0.25);
+    }
+    .login-title { color: #fff; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+    .login-sub   { color: rgba(255,255,255,0.75); font-size: 13px; margin-top: 4px; margin-bottom: 32px; }
+    .login-card  {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 28px 24px;
+      width: 100%;
+      box-shadow: var(--shadow-md);
+    }
+    .form-label  { font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .form-input  {
+      width: 100%; padding: 13px 14px; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--gray-200); font-size: 15px;
+      font-family: inherit; outline: none; transition: border-color .2s;
+      margin-bottom: 14px;
+    }
+    .form-input:focus { border-color: var(--primary-light); }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff; border: none; border-radius: var(--radius-sm);
+      padding: 14px; font-size: 15px; font-weight: 700;
+      width: 100%; cursor: pointer; font-family: inherit;
+      transition: background .2s, transform .1s;
+    }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:hover  { background: var(--primary-light); }
+    .btn-primary.full   { display: block; }
+    .error-msg {
+      background: var(--red-pale); color: var(--red-dark);
+      border-radius: var(--radius-sm); padding: 10px 12px;
+      font-size: 13px; margin-bottom: 12px;
+    }
+
+    /* ── APP SHELL ── */
+    #appShell { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* Topbar */
+    .topbar {
+      background: var(--primary);
+      color: #fff; padding: 14px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 8px rgba(26,82,118,0.3);
+    }
+    .topbar-brand { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+    .topbar-user  { font-size: 12px; color: rgba(255,255,255,0.8); }
+    .btn-logout {
+      background: rgba(255,255,255,0.15); border: none; color: #fff;
+      border-radius: 8px; padding: 6px 10px; font-size: 12px;
+      cursor: pointer; font-family: inherit; font-weight: 600;
+    }
+
+    /* Main */
+    #mainContent { flex: 1; padding: 16px; padding-bottom: 100px; overflow-y: auto; }
+
+    /* Bottom Nav */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 480px;
+      background: var(--white); border-top: 1px solid var(--gray-200);
+      display: flex; z-index: 100;
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 10px 4px 8px;
+      cursor: pointer; border: none; background: none;
+      font-family: inherit; color: var(--gray-400);
+      font-size: 10px; font-weight: 600; gap: 3px;
+      transition: color .15s;
+    }
+    .nav-item .nav-icon { font-size: 22px; line-height: 1; }
+    .nav-item.active    { color: var(--primary); }
+
+    /* Cards & Sections */
+    .card {
+      background: var(--white); border-radius: var(--radius);
+      box-shadow: var(--shadow); margin-bottom: 12px; overflow: hidden;
+    }
+    .section-title {
+      font-size: 12px; font-weight: 800; color: var(--gray-400);
+      text-transform: uppercase; letter-spacing: 0.8px;
+      margin: 16px 0 8px;
+    }
+
+    /* Stats Hero */
+    .stats-hero {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 12px;
+      color: #fff;
+    }
+    .stats-hero-label { font-size: 12px; opacity: 0.8; font-weight: 600; }
+    .stats-hero-value { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin: 4px 0; }
+    .stats-hero-sub   { font-size: 12px; opacity: 0.75; }
+    .progress-wrap    { background: rgba(255,255,255,0.25); border-radius: 99px; height: 8px; overflow: hidden; }
+    .progress-bar     { background: #fff; height: 100%; border-radius: 99px; transition: width .6s ease; }
+    .progress-label   { display: flex; justify-content: space-between; font-size: 12px; opacity: 0.85; margin-top: 6px; }
+
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .stat-card  {
+      border-radius: var(--radius); padding: 16px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .stat-card.green { background: var(--green-pale); }
+    .stat-card.red   { background: var(--red-pale); }
+    .stat-label { font-size: 11px; font-weight: 700; color: var(--gray-600); }
+    .stat-value { font-size: 28px; font-weight: 800; color: var(--gray-900); }
+    .stat-sub   { font-size: 11px; color: var(--gray-400); }
+
+    /* Rekap Marketing */
+    .rekap-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid var(--gray-100);
+    }
+    .rekap-row:last-child { border-bottom: none; }
+    .rekap-name  { font-size: 14px; font-weight: 700; }
+    .rekap-count { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+    .rekap-badge {
+      background: var(--primary-pale); color: var(--primary);
+      font-size: 13px; font-weight: 800; border-radius: 99px;
+      padding: 4px 12px;
+    }
+
+    /* Filter & Search */
+    .filter-bar  { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .filter-chip {
+      border: 1.5px solid var(--gray-200); background: var(--white);
+      border-radius: 99px; padding: 6px 14px; font-size: 12px;
+      font-weight: 700; cursor: pointer; font-family: inherit;
+      color: var(--gray-600); transition: all .15s;
+    }
+    .filter-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .search-bar {
+      width: 100%; padding: 11px 14px; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--gray-200); font-size: 14px;
+      font-family: inherit; outline: none; margin-bottom: 10px;
+      transition: border-color .2s;
+    }
+    .search-bar:focus { border-color: var(--primary-light); }
+
+    /* Tagihan Card */
+    .tagihan-card {
+      background: var(--white); border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 10px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--gray-200);
+    }
+    .tagihan-card.lunas { border-left-color: var(--green-mid); }
+    .tagihan-card.belum { border-left-color: var(--red-dark); }
+    .tagihan-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .tagihan-nama  { font-size: 15px; font-weight: 800; color: var(--gray-900); }
+    .tagihan-rek   { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+    .tagihan-total { font-size: 16px; font-weight: 800; color: var(--primary); white-space: nowrap; }
+    .tagihan-meta  { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+    .tagihan-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+    /* Badges */
+    .badge        { font-size: 10px; font-weight: 700; border-radius: 99px; padding: 3px 9px; }
+    .badge-green  { background: var(--green-pale); color: var(--green-dark); }
+    .badge-red    { background: var(--red-pale); color: var(--red-dark); }
+    .badge-gray   { background: var(--gray-100); color: var(--gray-600); }
+    .kol-1 { background: var(--green-pale); color: var(--green-dark); }
+    .kol-2 { background: var(--yellow-pale); color: var(--yellow-dark); }
+    .kol-3 { background: #fdebd0; color: #ca6f1e; }
+    .kol-4 { background: #fadbd8; color: #c0392b; }
+    .kol-5 { background: #922b21; color: #fff; }
+
+    /* Buttons */
+    .btn-sm {
+      border-radius: var(--radius-sm); padding: 7px 14px; font-size: 12px;
+      font-weight: 700; cursor: pointer; font-family: inherit; border: none;
+      transition: all .15s;
+    }
+    .btn-sm.green   { background: var(--green-mid); color: #fff; }
+    .btn-sm.wa      { background: #25d366; color: #fff; }
+    .btn-sm.outline { background: var(--white); color: var(--gray-600); border: 1.5px solid var(--gray-200); }
+    .btn-sm:disabled { opacity: 0.5; cursor: default; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      z-index: 200; display: flex; align-items: flex-end; justify-content: center;
+    }
+    .modal-sheet {
+      background: var(--white); border-radius: 20px 20px 0 0;
+      padding: 24px 20px 36px; width: 100%; max-width: 480px;
+      max-height: 85vh; overflow-y: auto;
+      animation: slideUp .25s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-title {
+      font-size: 17px; font-weight: 800; margin-bottom: 16px;
+      color: var(--gray-900);
+    }
+    .info-name   { font-size: 17px; font-weight: 800; color: var(--gray-900); }
+    .info-row    { font-size: 12px; color: var(--gray-400); margin-top: 3px; }
+    .info-total  {
+      font-size: 24px; font-weight: 800; color: var(--primary);
+      margin-top: 10px; margin-bottom: 16px;
+    }
+    .modal-label { font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 6px; }
+    .modal-input {
+      width: 100%; padding: 12px 14px; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--gray-200); font-size: 15px;
+      font-family: inherit; outline: none; margin-bottom: 12px;
+    }
+    .modal-input:focus { border-color: var(--primary-light); }
+    .modal-footer { display: flex; gap: 10px; margin-top: 4px; }
+    .btn-cancel {
+      flex: 1; padding: 13px; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--gray-200); background: var(--white);
+      font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+
+    /* Histori */
+    .histori-item {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 12px 16px; border-bottom: 1px solid var(--gray-100);
+    }
+    .histori-item:last-child { border-bottom: none; }
+    .h-nama   { font-size: 14px; font-weight: 700; }
+    .h-meta   { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+    .h-jumlah { font-size: 15px; font-weight: 800; color: var(--primary); }
+    .h-cara   { font-size: 11px; color: var(--gray-400); margin-top: 2px; text-align: right; }
+
+    /* Admin */
+    .admin-section { padding: 16px; }
+    .import-box {
+      border: 2px dashed var(--gray-200); border-radius: var(--radius-sm);
+      padding: 28px 16px; text-align: center; cursor: pointer;
+      color: var(--gray-400); font-size: 13px;
+      transition: border-color .2s, background .2s;
+    }
+    .import-box:hover { border-color: var(--primary-light); background: var(--primary-pale); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      padding: 12px 20px; border-radius: 99px; font-size: 13px; font-weight: 700;
+      z-index: 300; white-space: nowrap; box-shadow: var(--shadow-md);
+      animation: fadeIn .2s ease;
+    }
+    .toast.success { background: var(--gray-900); color: #fff; }
+    .toast.error   { background: var(--red-dark); color: #fff; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+    /* Loading */
+    .loading {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; padding: 40px; color: var(--gray-400); font-size: 14px;
+    }
+    .spinner {
+      width: 20px; height: 20px; border: 2.5px solid var(--gray-200);
+      border-top-color: var(--primary); border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state {
+      text-align: center; padding: 48px 16px; color: var(--gray-400);
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ── LOGIN SCREEN ── -->
+<div id="loginScreen">
+  <div class="login-logo">🏦</div>
+  <div class="login-title">BMT Amal Muslim</div>
+  <div class="login-sub">Wonogiri · Sistem Billing Digital</div>
+  <div class="login-card">
+    <div id="loginError" class="error-msg hidden"></div>
+    <div class="form-label">Username</div>
+    <input class="form-input" id="loginUser" type="text" placeholder="Masukkan username" autocomplete="username"/>
+    <div class="form-label">Password</div>
+    <input class="form-input" id="loginPass" type="password" placeholder="Masukkan password" autocomplete="current-password"/>
+    <button class="btn-primary" onclick="doLogin()">Masuk →</button>
+  </div>
+</div>
+
+<!-- ── APP SHELL ── -->
+<div id="appShell" class="hidden">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-brand">🏦 BMT Amal Muslim</div>
+      <div class="topbar-user" id="topbarUser"></div>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">Keluar</button>
+  </div>
+
+  <!-- Main Content -->
+  <div id="mainContent"></div>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+      <span class="nav-icon">📊</span>Dashboard
+    </button>
+    <button class="nav-item" data-page="tagihan" onclick="navigate('tagihan')">
+      <span class="nav-icon">📋</span>Tagihan
+    </button>
+    <button class="nav-item" data-page="histori" onclick="navigate('histori')">
+      <span class="nav-icon">🕐</span>Histori
+    </button>
+    <button class="nav-item" id="navAdmin" data-page="admin" onclick="navigate('admin')" style="display:none">
+      <span class="nav-icon">⚙️</span>Admin
+    </button>
+  </nav>
+</div>
+
+<!-- ── MODAL BAYAR ── -->
+<div id="modalBayar" class="modal-overlay hidden" onclick="closeModal()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-title">💰 Catat Pembayaran</div>
+    <div id="modalNasabahInfo"></div>
+    <div id="modalError" class="error-msg hidden"></div>
+    <div class="modal-label">Jumlah Bayar (Rp)</div>
+    <input class="modal-input" id="inputJumlah" type="number" placeholder="0"/>
+    <div class="modal-label">Cara Bayar</div>
+    <select class="modal-input" id="inputCaraBayar">
+      <option value="TUNAI">Tunai</option>
+      <option value="TRANSFER">Transfer</option>
+      <option value="QRIS">QRIS</option>
+    </select>
+    <div class="modal-label">No HP Nasabah (opsional)</div>
+    <input class="modal-input" id="inputNoHp" type="tel" placeholder="08xxxxxxxxxx"/>
+    <div class="modal-label">Catatan (opsional)</div>
+    <input class="modal-input" id="inputCatatan" type="text" placeholder="Catatan tambahan..."/>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">Batal</button>
+      <button class="btn-primary" style="flex:2" onclick="submitBayar()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL HP ── -->
+<div id="modalHp" class="modal-overlay hidden" onclick="closeModalHp()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-title">📱 Isi No HP Nasabah</div>
+    <div class="modal-label">No HP</div>
+    <input class="modal-input" id="inputHpBaru" type="tel" placeholder="08xxxxxxxxxx"/>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModalHp()">Batal</button>
+      <button class="btn-primary" style="flex:2" onclick="submitHp()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- ── SCRIPTS ── -->
+<script src="/static/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>
