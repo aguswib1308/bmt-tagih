@@ -576,9 +576,9 @@ async function renderAdmin() {
   const topAdminHtml = 
     '<div class="section-title" onclick="toggleUserList()" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">' +
       '<span>Manajemen User (Marketing)</span>' +
-      '<span id="toggleUserIcon">▼</span>' +
+      '<span id="toggleUserIcon">▶</span>' +
     '</div>' +
-    '<div class="card admin-section" id="adminUserContainer">' +
+    '<div class="card admin-section" id="adminUserContainer" style="display:none;">' +
       '<button class="btn-primary" onclick="openModalUser()" style="margin-bottom:12px;">➕ Tambah Marketing</button>' +
       '<div id="adminUserList"><div class="loading"><div class="spinner"></div> Memuat...</div></div>' +
     '</div>';
