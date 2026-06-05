@@ -1,11 +1,11 @@
-import sqlite3
+﻿import sqlite3
 import os
 import hashlib
 from datetime import datetime
 
-DB_PATH = "data/koperasi.db"
+DB_PATH = os.environ.get("DB_PATH", "data/koperasi.db")
 
-# Mapping kode AO → nama marketing
+# Mapping kode AO â†’ nama marketing
 KODE_AO = {
     "01001": "RAAFI",
     "01002": "RIZAL",
@@ -141,7 +141,7 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print("✅ Database berhasil diinisialisasi!")
+    print("âœ… Database berhasil diinisialisasi!")
 
 
 def import_excel(filepath, diimport_oleh="admin"):
@@ -237,7 +237,7 @@ def import_excel(filepath, diimport_oleh="admin"):
             alamat  = v(row, COL_ALAMAT)
             kabupaten = v(row, COL_KAB)
 
-            # Kode AO → nama marketing pakai mapping
+            # Kode AO â†’ nama marketing pakai mapping
             kode_ao = v(row, COL_MKT_ID)
             if kode_ao:
                 # Normalisasi: pastikan 5 digit dengan leading zero
@@ -346,3 +346,4 @@ def import_excel(filepath, diimport_oleh="admin"):
 if __name__ == "__main__":
     init_db()
     print("DB siap!")
+

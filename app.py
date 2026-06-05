@@ -12,7 +12,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "koperasi_bmt_secret_2026_ganti_in
 # â”€â”€ Auto-create folder data/ saat pertama jalan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 os.makedirs("data", exist_ok=True)
 
-DB_PATH = "data/koperasi.db"
+DB_PATH = os.environ.get("DB_PATH", "data/koperasi.db")
 
 # â”€â”€ Fonnte Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FONNTE_TOKEN = os.environ.get("FONNTE_TOKEN", "")
@@ -443,4 +443,5 @@ startup()
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
