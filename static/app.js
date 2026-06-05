@@ -222,6 +222,24 @@ async function renderDashboard() {
 // ── TAGIHAN LIST ───────────────────────────────────────────────
 async function renderTagihan() {
   const main = document.getElementById("mainContent");
+  
+  if (!document.getElementById("tagihanContainer")) {
+    main.innerHTML = 
+      '<div id="tagihanContainer">' +
+        '<div id="bulanBox">' + bulanPickerHtml(state.bulan) + '</div>' +
+        '<div class="filter-bar" id="filterStatusBox"></div>' +
+        '<div class="filter-bar" id="filterKolekBox"></div>' +
+        '<input class="search-bar" type="search" placeholder="🔍 Cari nama / no rekening..." id="searchInput" oninput="setSearch(this.value)"/>' +
+        '<div class="section-title" id="tagihanCount">Memuat...</div>' +
+        '<div id="tagihanList"><div class="loading"><div class="spinner"></div> Memuat...</div></div>' +
+        '<div id="loadMoreBtn" style="text-align:center;padding:16px;"></div>' +
+      '</div>';
+    document.getElementById("searchInput").value = state.searchQ || "";
+  } else {
+    document.getElementById("tagihanList").innerHTML = '<div class="loading"><div class="spinner"></div> Memuat...</div>';
+    document.getElementById("loadMoreBtn").innerHTML = '';
+  }
+
   state.tagihanOffset = 0;
   state.tagihan = [];
 
@@ -253,14 +271,12 @@ async function renderTagihan() {
     ? '<button class="filter-chip" onclick="loadMoreTagihan()">⬇️ Load lebih (' + sisaData + ' lagi)</button>'
     : "";
 
-  main.innerHTML =
-    bulanPickerHtml(state.bulan) +
-    '<div class="filter-bar">' + filterStatus + '</div>' +
-    '<div class="filter-bar">' + filterKolek + '</div>' +
-    '<input class="search-bar" type="search" placeholder="🔍 Cari nama / no rekening..." value="' + state.searchQ + '" oninput="setSearch(this.value)"/>' +
-    '<div class="section-title" id="tagihanCount">' + state.tagihanTotal + ' tagihan · tampil ' + state.tagihan.length + '</div>' +
-    '<div id="tagihanList">' + cards + '</div>' +
-    '<div id="loadMoreBtn" style="text-align:center;padding:16px;">' + loadMoreHtml + '</div>';
+  document.getElementById("bulanBox").innerHTML = bulanPickerHtml(state.bulan);
+  document.getElementById("filterStatusBox").innerHTML = filterStatus;
+  document.getElementById("filterKolekBox").innerHTML = filterKolek;
+  document.getElementById("tagihanCount").textContent = state.tagihanTotal + ' tagihan · tampil ' + state.tagihan.length;
+  document.getElementById("tagihanList").innerHTML = cards;
+  document.getElementById("loadMoreBtn").innerHTML = loadMoreHtml;
 }
 
 async function loadMoreTagihan() {
