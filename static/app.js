@@ -165,7 +165,7 @@ function renderPage() {
 function bulanPickerHtml(currentBulan) {
   // Generate 6 bulan terakhir + 1 ke depan
   const options = [];
-  const now = new Date(2026, 4, 1); // Mei 2026 — sesuai data real
+  const now = new Date(); // otomatis ikut bulan sekarang
   for (let i = -5; i <= 1; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const val = d.toISOString().slice(0, 7);
