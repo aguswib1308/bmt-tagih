@@ -497,9 +497,10 @@ function openModalKonfirmasiWA(id, e) {
   
   document.getElementById("modalWAKonfirmasiInfo").innerHTML =
     '<div class="info-name">' + t.nama + '</div>' +
-    '<div class="info-row">📋 ' + t.no_rekening + ' · 📱 ' + t.no_hp + '</div>' +
+    '<div class="info-row">📋 ' + t.no_rekening + '</div>' +
     '<div class="info-row" style="margin-bottom:12px;">📅 Jatuh tempo: ' + extractTanggal(t.tanggal_jt) + '</div>';
     
+  document.getElementById("inputWAHp").value = t.no_hp || "";
   document.getElementById("inputWATagihan").value = parseInt(t.total_tagihan || 0).toLocaleString('id-ID');
   document.getElementById("modalWAError").classList.add("hidden");
   document.getElementById("modalKonfirmasiWA").classList.remove("hidden");
@@ -510,6 +511,7 @@ function closeModalKonfirmasiWA() {
 }
 
 async function submitKirimWA() {
+  const noHp = document.getElementById("inputWAHp").value.trim();
   const nominalStr = document.getElementById("inputWATagihan").value;
   const nominal = nominalStr.replace(/[^0-9]/g, '');
   
@@ -517,7 +519,7 @@ async function submitKirimWA() {
   btn.disabled = true;
   btn.textContent = "Mengirim...";
   
-  const res = await api("/api/reminder/" + activeWAId, "POST", { nominal: nominal });
+  const res = await api("/api/reminder/" + activeWAId, "POST", { nominal: nominal, no_hp: noHp });
   
   btn.disabled = false;
   btn.textContent = "Kirim WA";
@@ -569,8 +571,11 @@ async function renderAdmin() {
   }
 
   const topAdminHtml = 
-    '<div class="section-title">Manajemen User (Marketing)</div>' +
-    '<div class="card admin-section">' +
+    '<div class="section-title" onclick="toggleUserList()" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">' +
+      '<span>Manajemen User (Marketing)</span>' +
+      '<span id="toggleUserIcon">▼</span>' +
+    '</div>' +
+    '<div class="card admin-section" id="adminUserContainer">' +
       '<button class="btn-primary" onclick="openModalUser()" style="margin-bottom:12px;">➕ Tambah Marketing</button>' +
       '<div id="adminUserList"><div class="loading"><div class="spinner"></div> Memuat...</div></div>' +
     '</div>';
@@ -810,6 +815,18 @@ async function saveTemplate(id) {
 }
 
 // ── MANAJEMEN USER ─────────────────────────────────────────────
+function toggleUserList() {
+  const container = document.getElementById("adminUserContainer");
+  const icon = document.getElementById("toggleUserIcon");
+  if (container.style.display === "none") {
+    container.style.display = "block";
+    icon.textContent = "▼";
+  } else {
+    container.style.display = "none";
+    icon.textContent = "▶";
+  }
+}
+
 async function loadUsersAdmin() {
   const list = document.getElementById("adminUserList");
   if (!list) return;
