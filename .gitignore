@@ -1,0 +1,36 @@
+# Database — jangan ikut commit
+data/
+*.db
+*.sqlite3
+
+# Upload temporary
+data/upload_*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtualenv
+venv/
+env/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env file (jangan expose token!)
+.env
