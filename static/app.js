@@ -530,12 +530,16 @@ async function renderAdmin() {
       '<div id="importProgress" class="hidden" style="margin-top:12px;"></div>' +
     '</div>' +
     '<div class="section-title">Blast Reminder WA</div>' +
-    '<div class="card admin-section">' +
-      '<p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Kirim reminder ke semua nasabah BELUM BAYAR yang punya no HP.</p>' +
-      bulanPickerHtml(state.bulan) +
-      '<button class="btn-primary full" onclick="doBlast()">📲 Kirim Blast WA</button>' +
-      '<div id="blastResult" class="hidden" style="margin-top:12px;"></div>' +
-    '</div>' +
+'<div class="card admin-section">' +
+  '<p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Kirim reminder ke nasabah BELUM BAYAR yang punya no HP.</p>' +
+  bulanPickerHtml(state.bulan) +
+  '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+    '<button class="btn-primary" style="flex:1" onclick="doBlast(false)">📲 Blast Semua</button>' +
+    '<button class="btn-primary" style="flex:1;background:var(--green-mid);" onclick="doBlast(true)">📅 Blast Hari Ini</button>' +
+  '</div>' +
+  '<p style="font-size:11px;color:var(--gray-400);">📅 Blast Hari Ini = hanya nasabah jatuh tempo tanggal ' + new Date().getDate() + '</p>' +
+  '<div id="blastResult" class="hidden" style="margin-top:12px;"></div>' +
+'</div>';
     '<div class="section-title">Histori Import</div>' +
 '<div class="card">' + logRows + '</div>' +
 '<div class="section-title">Template Pesan WA</div>' +
@@ -576,32 +580,33 @@ async function doImport(input) {
   toast("✅ Import berhasil!");
 }
 
-async function doBlast() {
+async function doBlast(hanyaHariIni = false) {
   const resultEl = document.getElementById("blastResult");
-  const btn = document.querySelector("#mainContent .btn-primary.full");
-  if (btn) { btn.textContent = "📲 Mengirim..."; btn.disabled = true; }
+  const label = hanyaHariIni ? "📅 Mengirim hari ini..." : "📲 Mengirim semua...";
 
-  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> Mengirim WA...</div>';
+  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> ' + label + '</div>';
   resultEl.classList.remove("hidden");
 
-  const res = await api("/api/reminder/blast", "POST", { bulan: state.bulan });
-
-  if (btn) { btn.textContent = "📲 Kirim Blast WA"; btn.disabled = false; }
+  const res = await api("/api/reminder/blast", "POST", {
+    bulan: state.bulan,
+    hanya_hari_ini: hanyaHariIni
+  });
 
   if (res.error) {
     resultEl.innerHTML = '<div class="error-msg">❌ ' + res.error + '</div>';
     return;
   }
 
+  const info = hanyaHariIni
+    ? "📅 Blast jatuh tempo hari ini (tgl " + new Date().getDate() + ")"
+    : "📲 Blast semua tunggakan";
+
   resultEl.innerHTML =
     '<div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;">' +
-    '✅ Blast selesai!<br>📲 Terkirim: <strong>' + res.terkirim + '</strong> · ❌ Gagal: <strong>' + res.gagal + '</strong>' +
+    info + '<br>✅ Terkirim: <strong>' + res.terkirim + '</strong> · ❌ Gagal: <strong>' + res.gagal + '</strong>' +
     '</div>';
   toast("📲 " + res.terkirim + " WA terkirim!");
 }
-
-// ── INIT ───────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", initApp);
 async function loadTemplate() {
   const sec = document.getElementById("templateSection");
   if (!sec) return;

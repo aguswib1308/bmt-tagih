@@ -345,21 +345,31 @@ def kirim_reminder(tagihan_id):
 @app.route("/api/reminder/blast", methods=["POST"])
 @admin_required
 def blast_reminder():
+    import time
     data         = request.json
     bulan        = data.get("bulan", datetime.now().strftime("%Y-%m"))
     marketing_id = data.get("marketing_id", "")
+    hanya_hari_ini = data.get("hanya_hari_ini", False)
 
     conn  = get_db()
     where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != ''"
     params = [bulan]
+
     if marketing_id:
         where += " AND n.marketing_id=?"
         params.append(marketing_id)
+
+    # Filter jatuh tempo hari ini
+    if hanya_hari_ini:
+        hari_ini = datetime.now().strftime("%d")
+        where += " AND SUBSTR(n.tanggal_jt, 7, 2) = ?"
+        params.append(hari_ini)
 
     rows = conn.execute(f"""
         SELECT t.id, t.total_tagihan, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         {where}
+        ORDER BY n.tanggal_jt ASC
     """, params).fetchall()
     conn.close()
 
@@ -367,12 +377,18 @@ def blast_reminder():
     for row in rows:
         pesan  = pesan_tagihan(row["nama"], row["total_tagihan"], row["tanggal_jt"], row["marketing_nama"])
         result = kirim_wa(row["no_hp"], pesan)
-        if "error" not in result:
+        if result.get("status") == True:
             terkirim += 1
         else:
             gagal += 1
+        time.sleep(5)
 
-    return jsonify({"success": True, "terkirim": terkirim, "gagal": gagal})
+    return jsonify({
+        "success": True,
+        "terkirim": terkirim,
+        "gagal": gagal,
+        "hanya_hari_ini": hanya_hari_ini
+    })
 
 # â”€â”€ UPDATE NO HP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/nasabah/<no_rek>/hp", methods=["PUT"])
