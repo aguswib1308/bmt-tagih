@@ -393,10 +393,10 @@ def bayar():
     conn.commit()
     conn.close()
 
-    # Kirim WA notif lunas
-    if row["no_hp"]:
-        pesan = pesan_lunas(row["nama"], jumlah, row["marketing_nama"])
-        kirim_wa(row["no_hp"], pesan)
+    # Kirim WA notif lunas (Dinonaktifkan)
+    # if row["no_hp"]:
+    #     pesan = pesan_lunas(row["nama"], jumlah, row["marketing_nama"])
+    #     kirim_wa(row["no_hp"], pesan)
 
     return jsonify({
         "success": True,
