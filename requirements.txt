@@ -2,3 +2,5 @@
 gunicorn
 requests
 openpyxl
+pandas
+xlrd
