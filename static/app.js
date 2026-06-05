@@ -301,7 +301,8 @@ function renderTagihanCard(t) {
   const kolLabel = ["","Lancar","DPK","Kurang Lancar","Diragukan","Macet"][t.kolektibilitas] || "Lancar";
 
   const noHpBtn = t.no_hp
-    ? '<button class="btn-sm wa" onclick="kirimReminderWA(' + t.id + ', event)">📲 WA</button>'
+    ? '<button class="btn-sm wa" onclick="kirimReminderWA(' + t.id + ', event)">📲 WA</button>' +
+      '<button class="btn-sm outline" onclick="openModalHp(\'' + t.no_rekening + '\', event)" style="font-size:11px;padding:5px 8px;">✏️</button>'
     : '<button class="btn-sm outline" onclick="openModalHp(\'' + t.no_rekening + '\', event)">📱 Isi HP</button>';
 
   const bayarBtn = isLunas
