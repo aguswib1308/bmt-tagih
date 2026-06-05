@@ -456,7 +456,7 @@
     <div id="modalWAKonfirmasiInfo"></div>
     <div id="modalWAError" class="error-msg hidden"></div>
     <div class="modal-label">Total Tagihan (bisa diedit)</div>
-    <input class="modal-input" id="inputWATagihan" type="number" placeholder="0"/>
+    <input class="modal-input" id="inputWATagihan" type="text" placeholder="0" oninput="formatInputRibuan(this)"/>
     <div class="modal-footer" style="margin-top:16px;">
       <button class="btn-cancel" onclick="closeModalKonfirmasiWA()">Batal</button>
       <button class="btn-primary" style="flex:2;background:#25d366" onclick="submitKirimWA()">Kirim WA</button>

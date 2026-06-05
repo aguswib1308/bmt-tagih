@@ -46,6 +46,28 @@ function bulanLabel(b) {
   return (namaBulan[parseInt(m)] || m) + " " + y;
 }
 
+function formatInputRibuan(el) {
+  let val = el.value.replace(/[^0-9]/g, '');
+  if (val) {
+    el.value = parseInt(val, 10).toLocaleString('id-ID');
+  } else {
+    el.value = '';
+  }
+}
+
+function extractTanggal(tglStr) {
+  if (!tglStr) return "-";
+  tglStr = String(tglStr).trim();
+  if (/^\d{8}$/.test(tglStr)) return tglStr.substring(6, 8);
+  if (/^\d{4}-\d{2}-\d{2}/.test(tglStr)) return tglStr.split('-')[2].substring(0, 2);
+  if (/^\d{1,2}[/-]\d{1,2}/.test(tglStr)) return tglStr.split(/[/-]/)[0];
+  const m1 = tglStr.match(/^(\d{1,2})\b/);
+  if (m1) return m1[1];
+  const m2 = tglStr.match(/\b(\d{1,2})$/);
+  if (m2) return m2[1];
+  return tglStr;
+}
+
 // ── API HELPER ─────────────────────────────────────────────────
 async function api(path, method = "GET", body = null, isForm = false) {
   const opts = { method, credentials: "include" };
@@ -476,9 +498,9 @@ function openModalKonfirmasiWA(id, e) {
   document.getElementById("modalWAKonfirmasiInfo").innerHTML =
     '<div class="info-name">' + t.nama + '</div>' +
     '<div class="info-row">📋 ' + t.no_rekening + ' · 📱 ' + t.no_hp + '</div>' +
-    '<div class="info-row" style="margin-bottom:12px;">📅 Jatuh tempo: ' + (t.tanggal_jt || "-") + '</div>';
+    '<div class="info-row" style="margin-bottom:12px;">📅 Jatuh tempo: ' + extractTanggal(t.tanggal_jt) + '</div>';
     
-  document.getElementById("inputWATagihan").value = t.total_tagihan || "";
+  document.getElementById("inputWATagihan").value = parseInt(t.total_tagihan || 0).toLocaleString('id-ID');
   document.getElementById("modalWAError").classList.add("hidden");
   document.getElementById("modalKonfirmasiWA").classList.remove("hidden");
 }
@@ -488,7 +510,9 @@ function closeModalKonfirmasiWA() {
 }
 
 async function submitKirimWA() {
-  const nominal = document.getElementById("inputWATagihan").value;
+  const nominalStr = document.getElementById("inputWATagihan").value;
+  const nominal = nominalStr.replace(/[^0-9]/g, '');
+  
   const btn = document.querySelector("#modalKonfirmasiWA .btn-primary");
   btn.disabled = true;
   btn.textContent = "Mengirim...";
@@ -685,7 +709,7 @@ function showBlastModal() {
         '</div>' +
         '<div style="display:flex; align-items:center; gap:4px;">' +
           '<span style="font-size:12px; font-weight:700;">Rp</span>' +
-          '<input type="number" id="blast_nom_' + t.id + '" value="' + t.total_tagihan + '" style="width:90px; padding:4px 8px; font-size:12px; border:1px solid var(--gray-200); border-radius:4px; text-align:right;" />' +
+          '<input type="text" id="blast_nom_' + t.id + '" value="' + parseInt(t.total_tagihan || 0).toLocaleString('id-ID') + '" style="width:90px; padding:4px 8px; font-size:12px; border:1px solid var(--gray-200); border-radius:4px; text-align:right;" oninput="formatInputRibuan(this)" />' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -703,7 +727,7 @@ async function submitBlastWA() {
   const updates = [];
   activeBlastData.bermasalah.forEach(t => {
     const el = document.getElementById('blast_nom_' + t.id);
-    if (el) updates.push({ id: t.id, nominal: el.value });
+    if (el) updates.push({ id: t.id, nominal: el.value.replace(/[^0-9]/g, '') });
   });
   
   const btn = document.getElementById("btnSubmitBlast");

@@ -33,13 +33,15 @@ def format_rp(n):
 def format_tgl_jt(tgl_str):
     if not tgl_str: return "-"
     tgl_str = str(tgl_str).strip()
+    if re.match(r'^\d{8}$', tgl_str):
+        return tgl_str[-2:]
     if re.match(r'^\d{4}-\d{2}-\d{2}', tgl_str):
         return tgl_str.split('-')[2][:2]
     if re.match(r'^\d{1,2}[/-]\d{1,2}', tgl_str):
         return re.split(r'[/-]', tgl_str)[0]
-    m = re.search(r'^(\d{1,2})', tgl_str)
+    m = re.search(r'^(\d{1,2})\b', tgl_str)
     if m: return m.group(1)
-    m = re.search(r'(\d{1,2})$', tgl_str)
+    m = re.search(r'\b(\d{1,2})$', tgl_str)
     if m: return m.group(1)
     return tgl_str
 
