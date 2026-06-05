@@ -228,7 +228,7 @@ def list_tagihan():
         FROM tagihan t
         JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE {' AND '.join(where)}
-        ORDER BY n.tanggal_jt ASC, t.total_tagihan DESC, t.kolektibilitas DESC, 
+        ORDER BY t.kolektibilitas DESC, n.tanggal_jt ASC, t.total_tagihan DESC
     """
     # Pagination
     limit  = int(request.args.get("limit", 50))
