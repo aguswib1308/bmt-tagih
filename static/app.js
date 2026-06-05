@@ -253,39 +253,81 @@ async function renderDashboard() {
 }
 
 // ── TAGIHAN LIST ───────────────────────────────────────────────
+// ── STATE tambahan untuk infinite scroll
+state.tagihanOffset = 0;
+state.tagihanTotal  = 0;
+state.tagihanLoading = false;
+
 async function renderTagihan() {
   const main = document.getElementById("mainContent");
+  state.tagihanOffset  = 0;
+  state.tagihan        = [];
 
-  // Build query
-  let url = `/api/tagihan?bulan=${state.bulan}`;
+  let url = `/api/tagihan?bulan=${state.bulan}&limit=50&offset=0`;
   if (state.filterStatus) url += `&status=${state.filterStatus}`;
-  if (state.searchQ) url += `&q=${encodeURIComponent(state.searchQ)}`;
+  if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
 
-  const rows = await api(url);
-  state.tagihan = rows;
+  const res = await api(url);
+  state.tagihan      = res.data || [];
+  state.tagihanTotal = res.total || 0;
+  state.tagihanOffset = state.tagihan.length;
 
-  const cards = rows.length === 0
-    ? `<div class="empty-state"><div class="empty-icon">📭</div><p>Tidak ada tagihan ditemukan</p></div>`
-    : rows.map(renderTagihanCard).join("");
+  const cards = state.tagihan.length === 0
+    ? `<div class="empty-state"><div class="empty-icon">🔭</div><p>Tidak ada tagihan ditemukan</p></div>`
+    : state.tagihan.map(renderTagihanCard).join("");
 
   main.innerHTML = `
     ${bulanPickerHtml(state.bulan)}
-
     <div class="filter-bar">
-      ${["", "BELUM", "LUNAS"].map((s) => {
-        const label = s === "" ? "Semua" : s === "BELUM" ? "Belum Bayar" : "Lunas";
-        return `<button class="filter-chip ${state.filterStatus === s ? "active" : ""}"
+      ${["","BELUM","LUNAS"].map((s) => {
+        const label = s===""?"Semua":s==="BELUM"?"Belum Bayar":"Lunas";
+        return `<button class="filter-chip ${state.filterStatus===s?"active":""}"
           onclick="setFilter('${s}')">${label}</button>`;
       }).join("")}
     </div>
-
     <input class="search-bar" type="search" placeholder="🔍 Cari nama / no rekening..."
-      value="${state.searchQ}"
-      oninput="setSearch(this.value)"/>
-
-    <div class="section-title">${rows.length} tagihan</div>
-    ${cards}
+      value="${state.searchQ}" oninput="setSearch(this.value)"/>
+    <div class="section-title" id="tagihanCount">${state.tagihanTotal} tagihan · tampil ${state.tagihan.length}</div>
+    <div id="tagihanList">${cards}</div>
+    <div id="loadMoreBtn" style="text-align:center;padding:16px;">
+      ${state.tagihanOffset < state.tagihanTotal
+        ? `<button class="filter-chip" onclick="loadMoreTagihan()">⬇️ Load lebih banyak (${state.tagihanTotal - state.tagihanOffset} lagi)</button>`
+        : ""}
+    </div>
   `;
+}
+
+async function loadMoreTagihan() {
+  if (state.tagihanLoading) return;
+  if (state.tagihanOffset >= state.tagihanTotal) return;
+
+  state.tagihanLoading = true;
+  const btn = document.getElementById("loadMoreBtn");
+  if (btn) btn.innerHTML = `<div class="loading"><div class="spinner"></div> Memuat...</div>`;
+
+  let url = `/api/tagihan?bulan=${state.bulan}&limit=50&offset=${state.tagihanOffset}`;
+  if (state.filterStatus) url += `&status=${state.filterStatus}`;
+  if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
+
+  const res = await api(url);
+  const newData = res.data || [];
+  state.tagihan = [...state.tagihan, ...newData];
+  state.tagihanOffset = state.tagihan.length;
+
+  const list = document.getElementById("tagihanList");
+  if (list) list.innerHTML += newData.map(renderTagihanCard).join("");
+
+  const count = document.getElementById("tagihanCount");
+  if (count) count.textContent = `${state.tagihanTotal} tagihan · tampil ${state.tagihan.length}`;
+
+  if (btn) {
+    const sisa = state.tagihanTotal - state.tagihanOffset;
+    btn.innerHTML = sisa > 0
+      ? `<button class="filter-chip" onclick="loadMoreTagihan()">⬇️ Load lebih banyak (${sisa} lagi)</button>`
+      : `<p style="color:var(--gray-400);font-size:12px;">✅ Semua data sudah ditampilkan</p>`;
+  }
+
+  state.tagihanLoading = false;
 }
 
 function renderTagihanCard(t) {

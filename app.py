@@ -226,9 +226,22 @@ def list_tagihan():
         WHERE {' AND '.join(where)}
         ORDER BY t.kolektibilitas DESC, t.total_tagihan DESC
     """
+    # Pagination
+    limit  = int(request.args.get("limit", 50))
+    offset = int(request.args.get("offset", 0))
+
+    sql_count = f"SELECT COUNT(*) FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening WHERE {' AND '.join(where)}"
+    total = conn.execute(sql_count, params).fetchone()[0]
+
+    sql += f" LIMIT {limit} OFFSET {offset}"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify({
+        "data": [dict(r) for r in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    })
 
 # ── CATAT PEMBAYARAN ──────────────────────────────────────────
 @app.route("/api/bayar", methods=["POST"])
