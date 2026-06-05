@@ -1,23 +1,25 @@
-/* ═══════════════════════════════════════════════════════════════
-   BMT Amal Muslim — app.js
+﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   BMT Amal Muslim â€” app.js
    Frontend logic: auth, dashboard, tagihan, histori, admin
-   ═══════════════════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-// ── STATE ──────────────────────────────────────────────────────
+// â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const state = {
-...
-  filterKolek: "",   // ← tambah ini
-  user: null,           // { nama, role, marketing_id }
+  user: null,
   page: "dashboard",
-  bulan: "2026-05",
+  bulan: "2026-06",
   tagihan: [],
   filterStatus: "",
+  filterKolek: "",
   searchQ: "",
   activeBayarId: null,
   activeHpRek: null,
+  tagihanOffset: 0,
+  tagihanTotal: 0,
+  tagihanLoading: false,
 };
 
-// ── FORMAT HELPERS ─────────────────────────────────────────────
+// â”€â”€ FORMAT HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function rp(n) {
   if (!n && n !== 0) return "Rp 0";
   return "Rp " + parseInt(n).toLocaleString("id-ID");
@@ -33,20 +35,20 @@ function rpShort(n) {
 
 function fmtTgl(tglStr) {
   if (!tglStr) return "-";
-  // ISO datetime "2026-05-15 10:30:00" → "15/05/2026 10:30"
+  // ISO datetime "2026-05-15 10:30:00" â†’ "15/05/2026 10:30"
   const d = new Date(tglStr.replace(" ", "T"));
   if (isNaN(d)) return tglStr;
   return d.toLocaleDateString("id-ID") + " " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 }
 
 function bulanLabel(b) {
-  // "2026-05" → "Mei 2026"
+  // "2026-05" â†’ "Mei 2026"
   const [y, m] = b.split("-");
   const namaBulan = ["","Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agt","Sep","Okt","Nov","Des"];
   return (namaBulan[parseInt(m)] || m) + " " + y;
 }
 
-// ── API HELPER ─────────────────────────────────────────────────
+// â”€â”€ API HELPER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function api(path, method = "GET", body = null, isForm = false) {
   const opts = { method, credentials: "include" };
   if (body && !isForm) {
@@ -59,7 +61,7 @@ async function api(path, method = "GET", body = null, isForm = false) {
   return res.json();
 }
 
-// ── TOAST ──────────────────────────────────────────────────────
+// â”€â”€ TOAST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _toastTimer = null;
 function toast(msg, type = "success") {
   const el = document.getElementById("toast");
@@ -70,7 +72,7 @@ function toast(msg, type = "success") {
   _toastTimer = setTimeout(() => el.classList.add("hidden"), 3000);
 }
 
-// ── AUTH ───────────────────────────────────────────────────────
+// â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function initApp() {
   const me = await api("/api/me");
   if (me.login) {
@@ -97,7 +99,7 @@ function showApp() {
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("appShell").classList.remove("hidden");
   document.getElementById("topbarUser").textContent =
-    state.user.nama + (state.user.role === "admin" ? " · Admin" : " · Marketing");
+    state.user.nama + (state.user.role === "admin" ? " Â· Admin" : " Â· Marketing");
   // Tampilkan menu admin kalau role admin
   if (state.user.role === "admin") {
     document.getElementById("navAdmin").style.display = "";
@@ -123,7 +125,7 @@ async function doLogin() {
 
   const res = await api("/api/login", "POST", { username, password });
 
-  btn.textContent = "Masuk →";
+  btn.textContent = "Masuk â†’";
   btn.disabled = false;
 
   if (res.error) {
@@ -142,7 +144,7 @@ async function doLogout() {
   showLogin();
 }
 
-// ── NAVIGATION ─────────────────────────────────────────────────
+// â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function navigate(page) {
   state.page = page;
   // Update nav active state
@@ -163,7 +165,7 @@ function renderPage() {
   }
 }
 
-// ── BULAN PICKER ───────────────────────────────────────────────
+// â”€â”€ BULAN PICKER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function bulanPickerHtml(currentBulan) {
   // Generate 6 bulan terakhir + 1 ke depan
   const options = [];
@@ -184,7 +186,7 @@ function changeBulan(val) {
   renderPage();
 }
 
-// ── DASHBOARD ──────────────────────────────────────────────────
+// â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function renderDashboard() {
   const main = document.getElementById("mainContent");
   const data = await api(`/api/dashboard?bulan=${state.bulan}`);
@@ -206,7 +208,7 @@ async function renderDashboard() {
       return `<div class="rekap-row">
         <div>
           <div class="rekap-name">${r.marketing_nama || "-"}</div>
-          <div class="rekap-count">${r.lunas}/${r.total} nasabah · ${rpShort(r.nominal_lunas)}</div>
+          <div class="rekap-count">${r.lunas}/${r.total} nasabah Â· ${rpShort(r.nominal_lunas)}</div>
         </div>
         <div class="rekap-badge">${pctM}%</div>
       </div>`;
@@ -249,13 +251,13 @@ async function renderDashboard() {
     ${rekapHtml}
 
     <button class="btn-primary full" onclick="navigate('tagihan')">
-      📋 Lihat Semua Tagihan
+      ðŸ“‹ Lihat Semua Tagihan
     </button>
   `;
 }
 
-// ── TAGIHAN LIST ───────────────────────────────────────────────
-// ── STATE tambahan untuk infinite scroll
+// â”€â”€ TAGIHAN LIST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ STATE tambahan untuk infinite scroll
 state.tagihanOffset = 0;
 state.tagihanTotal  = 0;
 state.tagihanLoading = false;
@@ -267,7 +269,7 @@ async function renderTagihan() {
 
   let url = `/api/tagihan?bulan=${state.bulan}&limit=50&offset=0`;
 if (state.filterStatus) url += `&status=${state.filterStatus}`;
-if (state.filterKolek)  url += `&kolek=${state.filterKolek}`;   // ← tambah ini
+if (state.filterKolek)  url += `&kolek=${state.filterKolek}`;   // â† tambah ini
 if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
 
   const res = await api(url);
@@ -276,7 +278,7 @@ if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
   state.tagihanOffset = state.tagihan.length;
 
   const cards = rows.length === 0
-    ? `<div class="empty-state"><div class="empty-icon">🔭</div><p>Tidak ada tagihan ditemukan</p></div>`
+    ? `<div class="empty-state"><div class="empty-icon">ðŸ”­</div><p>Tidak ada tagihan ditemukan</p></div>`
     : state.tagihan.map(renderTagihanCard).join("");
 
   main.innerHTML = `
@@ -289,18 +291,18 @@ if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
       }).join("")}
     </div>
     <div class="filter-bar">
-      ${[["","Semua Kolek"],["1","✅ Lancar"],["2","⚠️ DPK"],["3","🟠 KL"],["4","🔴 Diragukan"],["5","⛔ Macet"]].map(([k,label]) =>
+      ${[["","Semua Kolek"],["1","âœ… Lancar"],["2","âš ï¸ DPK"],["3","ðŸŸ  KL"],["4","ðŸ”´ Diragukan"],["5","â›” Macet"]].map(([k,label]) =>
         `<button class="filter-chip ${state.filterKolek===k?"active":""}"
           onclick="setFilterKolek('${k}')">${label}</button>`
       ).join("")}
     </div>
-    <input class="search-bar" type="search" placeholder="🔍 Cari nama / no rekening..."
+    <input class="search-bar" type="search" placeholder="ðŸ” Cari nama / no rekening..."
       value="${state.searchQ}" oninput="setSearch(this.value)"/>
-    <div class="section-title" id="tagihanCount">${state.tagihanTotal} tagihan · tampil ${state.tagihan.length}</div>
+    <div class="section-title" id="tagihanCount">${state.tagihanTotal} tagihan Â· tampil ${state.tagihan.length}</div>
     <div id="tagihanList">${cards}</div>
     <div id="loadMoreBtn" style="text-align:center;padding:16px;">
       ${state.tagihanOffset < state.tagihanTotal
-        ? `<button class="filter-chip" onclick="loadMoreTagihan()">⬇️ Load lebih banyak (${state.tagihanTotal - state.tagihanOffset} lagi)</button>`
+        ? `<button class="filter-chip" onclick="loadMoreTagihan()">â¬‡ï¸ Load lebih banyak (${state.tagihanTotal - state.tagihanOffset} lagi)</button>`
         : ""}
     </div>
   `;
@@ -316,7 +318,7 @@ async function loadMoreTagihan() {
 
   let url = `/api/tagihan?bulan=${state.bulan}&limit=50&offset=${state.tagihanOffset}`;
 if (state.filterStatus) url += `&status=${state.filterStatus}`;
-if (state.filterKolek)  url += `&kolek=${state.filterKolek}`;   // ← tambah ini
+if (state.filterKolek)  url += `&kolek=${state.filterKolek}`;   // â† tambah ini
 if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
 
   const res = await api(url);
@@ -328,13 +330,13 @@ if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
   if (list) list.innerHTML += newData.map(renderTagihanCard).join("");
 
   const count = document.getElementById("tagihanCount");
-  if (count) count.textContent = `${state.tagihanTotal} tagihan · tampil ${state.tagihan.length}`;
+  if (count) count.textContent = `${state.tagihanTotal} tagihan Â· tampil ${state.tagihan.length}`;
 
   if (btn) {
     const sisa = state.tagihanTotal - state.tagihanOffset;
     btn.innerHTML = sisa > 0
-      ? `<button class="filter-chip" onclick="loadMoreTagihan()">⬇️ Load lebih banyak (${sisa} lagi)</button>`
-      : `<p style="color:var(--gray-400);font-size:12px;">✅ Semua data sudah ditampilkan</p>`;
+      ? `<button class="filter-chip" onclick="loadMoreTagihan()">â¬‡ï¸ Load lebih banyak (${sisa} lagi)</button>`
+      : `<p style="color:var(--gray-400);font-size:12px;">âœ… Semua data sudah ditampilkan</p>`;
   }
 
   state.tagihanLoading = false;
@@ -346,31 +348,31 @@ function renderTagihanCard(t) {
   const kolLabel = ["", "Lancar", "DPK", "Kurang Lancar", "Diragukan", "Macet"][t.kolektibilitas] || "Lancar";
 
   const noHpBtn = t.no_hp
-    ? `<button class="btn-sm wa" onclick="kirimReminderWA(${t.id}, event)">📲 WA</button>`
-    : `<button class="btn-sm outline" onclick="openModalHp('${t.no_rekening}', event)">📱 Isi HP</button>`;
+    ? `<button class="btn-sm wa" onclick="kirimReminderWA(${t.id}, event)">ðŸ“² WA</button>`
+    : `<button class="btn-sm outline" onclick="openModalHp('${t.no_rekening}', event)">ðŸ“± Isi HP</button>`;
 
   const bayarBtn = isLunas
-    ? `<button class="btn-sm outline" style="color:var(--green-dark);border-color:var(--green-mid);" disabled>✅ Lunas</button>`
-    : `<button class="btn-sm green" onclick="openModalBayar(${t.id}, event)">💰 Bayar</button>`;
+    ? `<button class="btn-sm outline" style="color:var(--green-dark);border-color:var(--green-mid);" disabled>âœ… Lunas</button>`
+    : `<button class="btn-sm green" onclick="openModalBayar(${t.id}, event)">ðŸ’° Bayar</button>`;
 
   return `
     <div class="tagihan-card ${isLunas ? "lunas" : "belum"}">
       <div class="tagihan-header">
         <div>
           <div class="tagihan-nama">${t.nama}</div>
-          <div class="tagihan-rek">${t.no_rekening} · ${t.marketing_nama || "-"}</div>
+          <div class="tagihan-rek">${t.no_rekening} Â· ${t.marketing_nama || "-"}</div>
         </div>
         <div class="tagihan-total">${rp(t.total_tagihan)}</div>
       </div>
       <div class="tagihan-meta">
         <span class="badge ${kolClass}">${kolLabel}</span>
         ${isLunas
-          ? `<span class="badge badge-green">✅ LUNAS · ${t.cara_bayar || ""}</span>`
-          : `<span class="badge badge-red">⏳ BELUM</span>`}
+          ? `<span class="badge badge-green">âœ… LUNAS Â· ${t.cara_bayar || ""}</span>`
+          : `<span class="badge badge-red">â³ BELUM</span>`}
         <span class="badge badge-gray">JT: ${t.tanggal_jt || "-"}</span>
       </div>
       <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px;">
-        Pokok: ${rp(t.tunggakan_pokok)} · Margin: ${rp(t.tunggakan_margin)}
+        Pokok: ${rp(t.tunggakan_pokok)} Â· Margin: ${rp(t.tunggakan_margin)}
       </div>
       <div class="tagihan-actions">
         ${bayarBtn}
@@ -394,7 +396,7 @@ function setFilterKolek(k) {
   state.filterKolek = k;
   renderTagihan();
 }
-// ── MODAL BAYAR ────────────────────────────────────────────────
+// â”€â”€ MODAL BAYAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openModalBayar(tagihan_id, e) {
   if (e) e.stopPropagation();
   const t = state.tagihan.find((x) => x.id === tagihan_id);
@@ -404,9 +406,9 @@ function openModalBayar(tagihan_id, e) {
 
   document.getElementById("modalNasabahInfo").innerHTML = `
     <div class="info-name">${t.nama}</div>
-    <div class="info-row">📋 ${t.no_rekening} · ${t.marketing_nama || "-"}</div>
-    <div class="info-row">📅 Jatuh tempo: ${t.tanggal_jt || "-"}</div>
-    <div class="info-row" style="margin-top:6px;">Pokok: ${rp(t.tunggakan_pokok)} · Margin: ${rp(t.tunggakan_margin)}</div>
+    <div class="info-row">ðŸ“‹ ${t.no_rekening} Â· ${t.marketing_nama || "-"}</div>
+    <div class="info-row">ðŸ“… Jatuh tempo: ${t.tanggal_jt || "-"}</div>
+    <div class="info-row" style="margin-top:6px;">Pokok: ${rp(t.tunggakan_pokok)} Â· Margin: ${rp(t.tunggakan_margin)}</div>
     <div class="info-total">${rp(t.total_tagihan)}</div>
   `;
 
@@ -456,7 +458,7 @@ async function submitBayar() {
     catatan,
   });
 
-  btn.textContent = "💾 Simpan";
+  btn.textContent = "ðŸ’¾ Simpan";
   btn.disabled = false;
 
   if (res.error) {
@@ -466,12 +468,12 @@ async function submitBayar() {
   }
 
   closeModal();
-  toast("✅ " + (res.message || "Pembayaran berhasil dicatat!"));
+  toast("âœ… " + (res.message || "Pembayaran berhasil dicatat!"));
   // Reload tagihan list
   renderTagihan();
 }
 
-// ── MODAL HP ───────────────────────────────────────────────────
+// â”€â”€ MODAL HP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openModalHp(no_rekening, e) {
   if (e) e.stopPropagation();
   state.activeHpRek = no_rekening;
@@ -498,16 +500,16 @@ async function submitHp() {
   btn.disabled = false;
 
   if (res.error) {
-    toast("❌ Gagal simpan HP: " + res.error, "error");
+    toast("âŒ Gagal simpan HP: " + res.error, "error");
     return;
   }
 
   closeModalHp();
-  toast("📱 No HP berhasil diupdate");
+  toast("ðŸ“± No HP berhasil diupdate");
   renderTagihan();
 }
 
-// ── REMINDER WA ────────────────────────────────────────────────
+// â”€â”€ REMINDER WA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function kirimReminderWA(tagihan_id, e) {
   if (e) e.stopPropagation();
   const btn = e.target;
@@ -521,19 +523,19 @@ async function kirimReminderWA(tagihan_id, e) {
   btn.disabled = false;
 
   if (res.error) {
-    toast("❌ " + res.error, "error");
+    toast("âŒ " + res.error, "error");
   } else {
-    toast("📲 Reminder WA terkirim!");
+    toast("ðŸ“² Reminder WA terkirim!");
   }
 }
 
-// ── HISTORI ────────────────────────────────────────────────────
+// â”€â”€ HISTORI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function renderHistori() {
   const main = document.getElementById("mainContent");
   const rows = await api("/api/histori");
 
   if (!rows.length) {
-    main.innerHTML = `<div class="empty-state"><div class="empty-icon">🕐</div><p>Belum ada histori pembayaran</p></div>`;
+    main.innerHTML = `<div class="empty-state"><div class="empty-icon">ðŸ•</div><p>Belum ada histori pembayaran</p></div>`;
     return;
   }
 
@@ -541,7 +543,7 @@ async function renderHistori() {
     <div class="histori-item">
       <div class="histori-left">
         <div class="h-nama">${p.nama}</div>
-        <div class="h-meta">${p.no_rekening} · ${p.cara_bayar || "TUNAI"} · ${p.dicatat_oleh || "-"}</div>
+        <div class="h-meta">${p.no_rekening} Â· ${p.cara_bayar || "TUNAI"} Â· ${p.dicatat_oleh || "-"}</div>
         <div class="h-meta">${fmtTgl(p.tanggal)}</div>
       </div>
       <div class="histori-right">
@@ -557,12 +559,12 @@ async function renderHistori() {
   `;
 }
 
-// ── ADMIN ──────────────────────────────────────────────────────
+// â”€â”€ ADMIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function renderAdmin() {
   const main = document.getElementById("mainContent");
 
   if (state.user.role !== "admin") {
-    main.innerHTML = `<div class="empty-state"><div class="empty-icon">🔒</div><p>Akses ditolak</p></div>`;
+    main.innerHTML = `<div class="empty-state"><div class="empty-icon">ðŸ”’</div><p>Akses ditolak</p></div>`;
     return;
   }
 
@@ -575,8 +577,8 @@ async function renderAdmin() {
       <div class="histori-item">
         <div class="histori-left">
           <div class="h-nama">${bulanLabel(l.bulan)}</div>
-          <div class="h-meta">+${l.nasabah_baru} baru · ~${l.nasabah_update} update · ${l.nasabah_nonaktif} nonaktif</div>
-          <div class="h-meta">${l.tagihan_baru} tagihan baru · ${fmtTgl(l.waktu)}</div>
+          <div class="h-meta">+${l.nasabah_baru} baru Â· ~${l.nasabah_update} update Â· ${l.nasabah_nonaktif} nonaktif</div>
+          <div class="h-meta">${l.tagihan_baru} tagihan baru Â· ${fmtTgl(l.waktu)}</div>
         </div>
         <div class="histori-right">
           <div class="h-cara">${l.diimport_oleh}</div>
@@ -588,7 +590,7 @@ async function renderAdmin() {
     <div class="section-title">Import Data Excel</div>
     <div class="card admin-section">
       <div class="import-box" onclick="document.getElementById('fileImport').click()">
-        <div style="font-size:36px">📂</div>
+        <div style="font-size:36px">ðŸ“‚</div>
         <p>Tap untuk pilih file Excel tagihan</p>
         <p style="font-size:11px;margin-top:4px;">(.xlsx, .xls)</p>
       </div>
@@ -603,7 +605,7 @@ async function renderAdmin() {
         Kirim reminder ke semua nasabah BELUM BAYAR yang punya no HP.
       </p>
       ${bulanPickerHtml(state.bulan)}
-      <button class="btn-primary full" onclick="doBlast()">📲 Kirim Blast WA</button>
+      <button class="btn-primary full" onclick="doBlast()">ðŸ“² Kirim Blast WA</button>
       <div id="blastResult" class="hidden" style="margin-top:12px;"></div>
     </div>
 
@@ -627,49 +629,50 @@ async function doImport(input) {
   const res = await api("/api/import", "POST", form, true);
 
   if (res.error) {
-    progressEl.innerHTML = `<div class="error-msg">❌ ${res.error}</div>`;
+    progressEl.innerHTML = `<div class="error-msg">âŒ ${res.error}</div>`;
     return;
   }
 
   progressEl.innerHTML = `
     <div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;line-height:1.8;">
-      ✅ <strong>Import ${bulanLabel(res.bulan)} berhasil!</strong><br>
-      👤 Nasabah baru: <strong>${res.nasabah_baru}</strong><br>
-      🔄 Nasabah update: <strong>${res.nasabah_update}</strong><br>
-      ❌ Nonaktif: <strong>${res.nasabah_nonaktif}</strong><br>
-      📋 Tagihan baru: <strong>${res.tagihan_baru}</strong><br>
-      🔄 Tagihan update: <strong>${res.tagihan_update}</strong>
+      âœ… <strong>Import ${bulanLabel(res.bulan)} berhasil!</strong><br>
+      ðŸ‘¤ Nasabah baru: <strong>${res.nasabah_baru}</strong><br>
+      ðŸ”„ Nasabah update: <strong>${res.nasabah_update}</strong><br>
+      âŒ Nonaktif: <strong>${res.nasabah_nonaktif}</strong><br>
+      ðŸ“‹ Tagihan baru: <strong>${res.tagihan_baru}</strong><br>
+      ðŸ”„ Tagihan update: <strong>${res.tagihan_update}</strong>
     </div>`;
 
   // Reset file input
   input.value = "";
-  toast("✅ Import berhasil!");
+  toast("âœ… Import berhasil!");
 }
 
 async function doBlast() {
   const resultEl = document.getElementById("blastResult");
   const btn = document.querySelector("#mainContent .btn-primary.full");
-  if (btn) { btn.textContent = "📲 Mengirim..."; btn.disabled = true; }
+  if (btn) { btn.textContent = "ðŸ“² Mengirim..."; btn.disabled = true; }
 
   resultEl.innerHTML = `<div class="loading"><div class="spinner"></div> Mengirim WA...</div>`;
   resultEl.classList.remove("hidden");
 
   const res = await api("/api/reminder/blast", "POST", { bulan: state.bulan });
 
-  if (btn) { btn.textContent = "📲 Kirim Blast WA"; btn.disabled = false; }
+  if (btn) { btn.textContent = "ðŸ“² Kirim Blast WA"; btn.disabled = false; }
 
   if (res.error) {
-    resultEl.innerHTML = `<div class="error-msg">❌ ${res.error}</div>`;
+    resultEl.innerHTML = `<div class="error-msg">âŒ ${res.error}</div>`;
     return;
   }
 
   resultEl.innerHTML = `
     <div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;">
-      ✅ Blast selesai!<br>
-      📲 Terkirim: <strong>${res.terkirim}</strong> · ❌ Gagal: <strong>${res.gagal}</strong>
+      âœ… Blast selesai!<br>
+      ðŸ“² Terkirim: <strong>${res.terkirim}</strong> Â· âŒ Gagal: <strong>${res.gagal}</strong>
     </div>`;
-  toast(`📲 ${res.terkirim} WA terkirim!`);
+  toast(`ðŸ“² ${res.terkirim} WA terkirim!`);
 }
 
-// ── INIT ───────────────────────────────────────────────────────
+// â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.addEventListener("DOMContentLoaded", initApp);
+
