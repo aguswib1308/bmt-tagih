@@ -3,9 +3,9 @@ import os
 import hashlib
 from datetime import datetime
 
-DB_PATH = os.environ.get("DB_PATH", "data/koperasi.db")
+DB_PATH = "data/koperasi.db"
 
-# Mapping kode AO â†’ nama marketing
+# Mapping kode AO → nama marketing
 KODE_AO = {
     "01001": "RAAFI",
     "01002": "RIZAL",
@@ -52,8 +52,6 @@ def init_db():
             tanggal_jt TEXT,
             alamat TEXT,
             kabupaten TEXT,
-            tgl_realisasi TEXT,
-            is_reschedule INTEGER DEFAULT 0,
             aktif INTEGER DEFAULT 1
         )
     """)
@@ -143,7 +141,7 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print("âœ… Database berhasil diinisialisasi!")
+    print("✅ Database berhasil diinisialisasi!")
 
 
 def import_excel(filepath, diimport_oleh="admin"):
@@ -181,7 +179,6 @@ def import_excel(filepath, diimport_oleh="admin"):
         COL_PLAFOND = find_col(df, ['plafond_pokok','plafond'])
         COL_KOLEK   = find_col(df, ['kolek','kolektibilitas','kol'])
         COL_TGL_BAYAR = find_col(df, ['tgl_bayar','tanggal_bayar','tgl bayar'])
-        COL_REALISASI = find_col(df, ['tgl_realisasi', 'tanggal_realisasi'])
 
         print(f"Mapping: rek={COL_REK} nama={COL_NAMA} hp={COL_HP} mkt={COL_MKT_ID} saldo={COL_SALDO} t_pok={COL_T_POK} t_mar={COL_T_MAR} kolek={COL_KOLEK}")
 
@@ -240,14 +237,7 @@ def import_excel(filepath, diimport_oleh="admin"):
             alamat  = v(row, COL_ALAMAT)
             kabupaten = v(row, COL_KAB)
 
-            tgl_realisasi = v(row, COL_REALISASI)
-            if tgl_realisasi and tgl_realisasi.endswith(".0"): tgl_realisasi = tgl_realisasi[:-2]
-            
-            is_reschedule = 0
-            if tgl_realisasi == "20251231":
-                is_reschedule = -1
-
-            # Kode AO â†’ nama marketing pakai mapping
+            # Kode AO → nama marketing pakai mapping
             kode_ao = v(row, COL_MKT_ID)
             if kode_ao:
                 # Normalisasi: pastikan 5 digit dengan leading zero
@@ -263,15 +253,15 @@ def import_excel(filepath, diimport_oleh="admin"):
                 conn.execute("""
                     UPDATE nasabah SET nama=?, no_hp=COALESCE(NULLIF(no_hp,''), ?),
                     marketing_id=?, marketing_nama=?, tanggal_jt=?,
-                    alamat=?, kabupaten=?, tgl_realisasi=?, is_reschedule=CASE WHEN is_reschedule=1 THEN 1 ELSE ? END, aktif=1 WHERE no_rekening=?
-                """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten, tgl_realisasi, is_reschedule, no_rek))
+                    alamat=?, kabupaten=?, aktif=1 WHERE no_rekening=?
+                """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten, no_rek))
                 nasabah_update += 1
             else:
                 conn.execute("""
                     INSERT INTO nasabah (no_rekening, nama, no_hp, marketing_id,
-                    marketing_nama, tanggal_jt, alamat, kabupaten, tgl_realisasi, is_reschedule)
-                    VALUES (?,?,?,?,?,?,?,?,?,?)
-                """, (no_rek, nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten, tgl_realisasi, is_reschedule))
+                    marketing_nama, tanggal_jt, alamat, kabupaten)
+                    VALUES (?,?,?,?,?,?,?,?)
+                """, (no_rek, nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten))
                 nasabah_baru += 1
 
             # Nilai tagihan
@@ -299,7 +289,9 @@ def import_excel(filepath, diimport_oleh="admin"):
             ).fetchone()
 
             if existing_t:
-                if existing_t[1] != 'LUNAS':
+                status_lama = existing_t[1]
+                if status_lama == 'LUNAS':
+                    # Sudah lunas di app — update angka saja, status tetap LUNAS
                     conn.execute("""
                         UPDATE tagihan SET plafond_pokok=?, saldo_pinjaman=?,
                         tunggakan_pokok=?, tunggakan_margin=?, total_tagihan=?,
@@ -307,6 +299,44 @@ def import_excel(filepath, diimport_oleh="admin"):
                         WHERE no_rekening=? AND bulan=?
                     """, (plafond, saldo, tung_pokok, tung_margin, total,
                           angsuran, kolek, tgl_bayar, no_rek, bulan))
+                else:
+                    # Cek tgl_bayar — format YYYYMMDD ambil 6 digit pertama = YYYYMM
+                    bulan_bayar = None
+                    if tgl_bayar and len(str(tgl_bayar)) == 8:
+                        bulan_bayar = str(tgl_bayar)[0:6]
+                    bulan_import = bulan.replace("-", "")  # 2026-06 → 202606
+
+                    if total == 0 and tung_pokok == 0 and tung_margin == 0:
+                        # Tunggakan 0 → LUNAS SISTEM
+                        status_baru = 'LUNAS'
+                        cara_baru   = 'SISTEM'
+                    elif bulan_bayar and bulan_bayar == bulan_import:
+                        # Ada tgl_bayar bulan ini → LUNAS SETOR
+                        status_baru = 'LUNAS'
+                        cara_baru   = 'SETOR'
+                    else:
+                        # Belum bayar bulan ini → tetap BELUM
+                        status_baru = 'BELUM'
+                        cara_baru   = None
+
+                    if status_baru == 'LUNAS':
+                        conn.execute("""
+                            UPDATE tagihan SET plafond_pokok=?, saldo_pinjaman=?,
+                            tunggakan_pokok=?, tunggakan_margin=?, total_tagihan=?,
+                            angsuran_per_bulan=?, kolektibilitas=?, tgl_bayar=?,
+                            status='LUNAS', cara_bayar=?
+                            WHERE no_rekening=? AND bulan=?
+                        """, (plafond, saldo, tung_pokok, tung_margin, total,
+                              angsuran, kolek, tgl_bayar, cara_baru, no_rek, bulan))
+                    else:
+                        conn.execute("""
+                            UPDATE tagihan SET plafond_pokok=?, saldo_pinjaman=?,
+                            tunggakan_pokok=?, tunggakan_margin=?, total_tagihan=?,
+                            angsuran_per_bulan=?, kolektibilitas=?, tgl_bayar=?,
+                            status='BELUM', cara_bayar=NULL
+                            WHERE no_rekening=? AND bulan=?
+                        """, (plafond, saldo, tung_pokok, tung_margin, total,
+                              angsuran, kolek, tgl_bayar, no_rek, bulan))
                 tagihan_update += 1
             else:
                 conn.execute("""
@@ -356,4 +386,3 @@ def import_excel(filepath, diimport_oleh="admin"):
 if __name__ == "__main__":
     init_db()
     print("DB siap!")
-
