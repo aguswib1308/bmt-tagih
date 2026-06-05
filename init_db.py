@@ -5,6 +5,26 @@ from datetime import datetime
 
 DB_PATH = "data/koperasi.db"
 
+# Mapping kode AO → nama marketing
+KODE_AO = {
+    "01001": "RAAFI",
+    "01002": "RIZAL",
+    "01003": "NIKKO",
+    "01004": "LILIK",
+    "01005": "WIDI",
+    "01006": "SISWANTO",
+    "01007": "SURATMAN",
+    "01008": "TUMINO",
+    "01009": "AGUS",
+    "01010": "SDIT",
+    "01011": "EDHI",
+    "01012": "JOKO",
+    "01013": "EKO MEY",
+    "01014": "BAM",
+    "01015": "LILIS",
+    "01016": "AGUS S",
+}
+
 def init_db():
     os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -86,7 +106,7 @@ def init_db():
         )
     """)
 
-    # Default admin
+    # Default admin (password: admin123)
     default_pw = hashlib.sha256("admin123".encode()).hexdigest()
     c.execute("""
         INSERT OR IGNORE INTO users (username, password, nama, role, marketing_id)
@@ -96,22 +116,22 @@ def init_db():
     # Default marketing users (password: bmt2026)
     default_pw_mkt = hashlib.sha256("bmt2026".encode()).hexdigest()
     marketing_list = [
-        ("raafi",    "RAAFI",    "MKT001"),
-        ("rizal",    "RIZAL",    "MKT002"),
-        ("nikko",    "NIKKO",    "MKT003"),
-        ("lilik",    "LILIK",    "MKT004"),
-        ("widi",     "WIDI",     "MKT005"),
-        ("siswanto", "SISWANTO", "MKT006"),
-        ("suratman", "SURATMAN", "MKT007"),
-        ("tumino",   "TUMINO",   "MKT008"),
-        ("agus",     "AGUS",     "MKT009"),
-        ("sdit",     "SDIT",     "MKT010"),
-        ("edhi",     "EDHI",     "MKT011"),
-        ("joko",     "JOKO",     "MKT012"),
-        ("ekomey",   "EKO MEY",  "MKT013"),
-        ("bam",      "BAM",      "MKT014"),
-        ("lilis",    "LILIS",    "MKT015"),
-        ("aguss",    "AGUS S",   "MKT016"),
+        ("raafi",    "RAAFI",    "01001"),
+        ("rizal",    "RIZAL",    "01002"),
+        ("nikko",    "NIKKO",    "01003"),
+        ("lilik",    "LILIK",    "01004"),
+        ("widi",     "WIDI",     "01005"),
+        ("siswanto", "SISWANTO", "01006"),
+        ("suratman", "SURATMAN", "01007"),
+        ("tumino",   "TUMINO",   "01008"),
+        ("agus",     "AGUS",     "01009"),
+        ("sdit",     "SDIT",     "01010"),
+        ("edhi",     "EDHI",     "01011"),
+        ("joko",     "JOKO",     "01012"),
+        ("ekomey",   "EKO MEY",  "01013"),
+        ("bam",      "BAM",      "01014"),
+        ("lilis",    "LILIS",    "01015"),
+        ("aguss",    "AGUS S",   "01016"),
     ]
     for username, nama, mkt_id in marketing_list:
         c.execute("""
@@ -125,84 +145,56 @@ def init_db():
 
 
 def import_excel(filepath, diimport_oleh="admin"):
-    """
-    Import dari file Excel format Eks Nominatif Kredit BMT.
-    
-    Kolom yang dipakai dari file asli:
-    - no_rekening     → no_rekening nasabah
-    - nama            → nama nasabah  
-    - handphone/telp  → no HP
-    - kode_ao         → marketing_id
-    - nama_ao         → nama marketing
-    - jatuh_tempo     → tanggal jatuh tempo
-    - alamat          → alamat
-    - kabupaten       → kabupaten
-    - bakidebet       → saldo pinjaman (baki debet)
-    - tunggak_pokok   → tunggakan pokok
-    - tunggak_margin  → tunggakan margin
-    - angsuran_per_bulan → angsuran per bulan
-    - plafond_pokok   → plafond pokok
-    - kolek           → kode kolektibilitas (1-5)
-    - kolektibilitas  → label kolektibilitas
-    - tgl_bayar       → tanggal bayar terakhir
-    """
     try:
         import pandas as pd
 
-        # Baca file — support .xls dan .xlsx
         ext = os.path.splitext(filepath)[1].lower()
         if ext == '.xls':
-            try:
-                import xlrd
-                df = pd.read_excel(filepath, engine='xlrd', dtype=str)
-            except ImportError:
-                # Fallback: coba openpyxl (kalau file sebenarnya xlsx)
-                df = pd.read_excel(filepath, dtype=str)
+            df = pd.read_excel(filepath, engine='xlrd', dtype=str)
         else:
             df = pd.read_excel(filepath, dtype=str)
 
-        # Normalisasi nama kolom: lowercase + strip
+        # Normalisasi nama kolom
         df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
 
-        def col(df, names):
-            """Cari kolom pertama yang cocok dari list nama"""
-            for n in names:
-                if n in df.columns:
-                    return n
+        print("Kolom ditemukan:", list(df.columns))
+
+        def find_col(df, candidates):
+            for c in candidates:
+                if c in df.columns:
+                    return c
             return None
 
-        # Mapping kolom dari file asli
-        COL_REK     = col(df, ['no_rekening', 'norek', 'no_rek', 'rekening'])
-        COL_NAMA    = col(df, ['nama'])
-        COL_HP      = col(df, ['handphone', 'hp', 'telp', 'telepon', 'no_hp'])
-        COL_MKT_ID  = col(df, ['kode_ao', 'kode_marketing', 'marketing_id', 'ao'])
-        COL_MKT_NM  = col(df, ['nama_ao', 'nama_marketing', 'marketing', 'nama_ao'])
-        COL_JT      = col(df, ['jatuh_tempo', 'tgl_jt', 'tanggal_jt', 'jt'])
-        COL_ALAMAT  = col(df, ['alamat'])
-        COL_KAB     = col(df, ['kabupaten', 'dati2'])
-        COL_SALDO   = col(df, ['bakidebet', 'baki_debet', 'saldo_pinjaman', 'saldo'])
-        COL_T_POK   = col(df, ['tunggak_pokok', 'tunggakan_pokok', 't_pokok'])
-        COL_T_MAR   = col(df, ['tunggak_margin', 'tunggakan_margin', 't_margin'])
-        COL_ANGS    = col(df, ['angsuran_per_bulan', 'angsuran', 'angs_per_bulan'])
-        COL_PLAFOND = col(df, ['plafond_pokok', 'plafond'])
-        COL_KOLEK   = col(df, ['kolek', 'kolektibilitas_kode', 'kol'])
-        COL_TGL_BAYAR = col(df, ['tgl_bayar', 'tanggal_bayar'])
+        COL_REK     = find_col(df, ['no_rekening','norek','no_rek','rekening'])
+        COL_NAMA    = find_col(df, ['nama'])
+        COL_HP      = find_col(df, ['handphone','hp','telp','telepon','no_hp','no_handphone'])
+        COL_MKT_ID  = find_col(df, ['kode_ao','kode_marketing','marketing_id','ao','kodeao'])
+        COL_JT      = find_col(df, ['jatuh_tempo','tgl_jt','tanggal_jt','jt','jatuh tempo'])
+        COL_ALAMAT  = find_col(df, ['alamat'])
+        COL_KAB     = find_col(df, ['kabupaten','dati2'])
+        COL_SALDO   = find_col(df, ['bakidebet','baki_debet','saldo_pinjaman','saldo','baki debet'])
+        COL_T_POK   = find_col(df, ['tunggak_pokok','tunggakan_pokok','t_pokok','tunggak pokok'])
+        COL_T_MAR   = find_col(df, ['tunggak_margin','tunggakan_margin','t_margin','tunggak margin'])
+        COL_ANGS    = find_col(df, ['angsuran_per_bulan','angsuran','angs_per_bulan','angsuran per bulan'])
+        COL_PLAFOND = find_col(df, ['plafond_pokok','plafond'])
+        COL_KOLEK   = find_col(df, ['kolek','kolektibilitas','kol'])
+        COL_TGL_BAYAR = find_col(df, ['tgl_bayar','tanggal_bayar','tgl bayar'])
+
+        print(f"Mapping: rek={COL_REK} nama={COL_NAMA} hp={COL_HP} mkt={COL_MKT_ID} saldo={COL_SALDO} t_pok={COL_T_POK} t_mar={COL_T_MAR} kolek={COL_KOLEK}")
 
         # Deteksi bulan dari nama file
         import re
-        bulan_map = {
-            'januari':'01','februari':'02','maret':'03','april':'04',
-            'mei':'05','juni':'06','juli':'07','agustus':'08',
-            'september':'09','oktober':'10','november':'11','desember':'12'
-        }
         bulan = datetime.now().strftime('%Y-%m')
         fname = os.path.basename(filepath).lower()
-        
-        # Coba dari nama file format 202605 atau 2026-05
         m = re.search(r'(20\d{2})(0[1-9]|1[0-2])', fname)
         if m:
             bulan = f"{m.group(1)}-{m.group(2)}"
         else:
+            bulan_map = {
+                'januari':'01','februari':'02','maret':'03','april':'04',
+                'mei':'05','juni':'06','juli':'07','agustus':'08',
+                'september':'09','oktober':'10','november':'11','desember':'12'
+            }
             for nama_bln, num in bulan_map.items():
                 if nama_bln in fname:
                     tahun_match = re.search(r'20\d{2}', fname)
@@ -214,7 +206,7 @@ def import_excel(filepath, diimport_oleh="admin"):
             if not col_name or col_name not in row.index:
                 return None
             val = row[col_name]
-            if val is None or str(val).strip().lower() in ('nan', 'none', ''):
+            if val is None or str(val).strip().lower() in ('nan','none',''):
                 return None
             return str(val).strip()
 
@@ -223,8 +215,7 @@ def import_excel(filepath, diimport_oleh="admin"):
             if not val:
                 return 0
             try:
-                # Hapus karakter non-numerik kecuali titik & koma
-                clean = val.replace(',', '').replace(' ', '')
+                clean = val.replace(',','').replace(' ','')
                 return float(clean)
             except:
                 return 0
@@ -242,11 +233,16 @@ def import_excel(filepath, diimport_oleh="admin"):
             no_rek_excel.add(no_rek)
             nama    = v(row, COL_NAMA)
             no_hp   = v(row, COL_HP)
-            mkt_id  = v(row, COL_MKT_ID)
-            mkt_nm  = v(row, COL_MKT_NM)
             tgl_jt  = v(row, COL_JT)
             alamat  = v(row, COL_ALAMAT)
             kabupaten = v(row, COL_KAB)
+
+            # Kode AO → nama marketing pakai mapping
+            kode_ao = v(row, COL_MKT_ID)
+            if kode_ao:
+                # Normalisasi: pastikan 5 digit dengan leading zero
+                kode_ao = kode_ao.zfill(5)
+            mkt_nm = KODE_AO.get(kode_ao, kode_ao)  # fallback ke kode kalau tidak ada di mapping
 
             # UPSERT nasabah
             existing = conn.execute(
@@ -255,20 +251,20 @@ def import_excel(filepath, diimport_oleh="admin"):
 
             if existing:
                 conn.execute("""
-                    UPDATE nasabah SET nama=?, no_hp=COALESCE(no_hp, ?),
+                    UPDATE nasabah SET nama=?, no_hp=COALESCE(NULLIF(no_hp,''), ?),
                     marketing_id=?, marketing_nama=?, tanggal_jt=?,
                     alamat=?, kabupaten=?, aktif=1 WHERE no_rekening=?
-                """, (nama, no_hp, mkt_id, mkt_nm, tgl_jt, alamat, kabupaten, no_rek))
+                """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten, no_rek))
                 nasabah_update += 1
             else:
                 conn.execute("""
                     INSERT INTO nasabah (no_rekening, nama, no_hp, marketing_id,
                     marketing_nama, tanggal_jt, alamat, kabupaten)
                     VALUES (?,?,?,?,?,?,?,?)
-                """, (no_rek, nama, no_hp, mkt_id, mkt_nm, tgl_jt, alamat, kabupaten))
+                """, (no_rek, nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten))
                 nasabah_baru += 1
 
-            # Hitung nilai tagihan
+            # Nilai tagihan
             saldo       = n(row, COL_SALDO)
             tung_pokok  = n(row, COL_T_POK)
             tung_margin = n(row, COL_T_MAR)
@@ -277,7 +273,6 @@ def import_excel(filepath, diimport_oleh="admin"):
             plafond     = n(row, COL_PLAFOND)
             tgl_bayar   = v(row, COL_TGL_BAYAR)
 
-            # Kolektibilitas — ambil angka 1-5
             kolek_raw = v(row, COL_KOLEK)
             kolek = 1
             if kolek_raw:
@@ -294,7 +289,6 @@ def import_excel(filepath, diimport_oleh="admin"):
             ).fetchone()
 
             if existing_t:
-                # Jangan overwrite kalau sudah LUNAS
                 if existing_t[1] != 'LUNAS':
                     conn.execute("""
                         UPDATE tagihan SET plafond_pokok=?, saldo_pinjaman=?,
@@ -314,7 +308,7 @@ def import_excel(filepath, diimport_oleh="admin"):
                       total, angsuran, kolek, tgl_bayar))
                 tagihan_baru += 1
 
-        # Auto-nonaktifkan nasabah yang tidak ada di Excel bulan ini
+        # Auto-nonaktifkan nasabah tidak ada di Excel
         all_aktif = conn.execute(
             "SELECT no_rekening FROM nasabah WHERE aktif=1"
         ).fetchall()
