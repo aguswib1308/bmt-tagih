@@ -449,6 +449,36 @@
   </div>
 </div>
 
+<!-- ── MODAL KONFIRMASI INDIVIDU WA ── -->
+<div id="modalKonfirmasiWA" class="modal-overlay hidden" onclick="closeModalKonfirmasiWA()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-title">📲 Konfirmasi Kirim WA</div>
+    <div id="modalWAKonfirmasiInfo"></div>
+    <div id="modalWAError" class="error-msg hidden"></div>
+    <div class="modal-label">Total Tagihan (bisa diedit)</div>
+    <input class="modal-input" id="inputWATagihan" type="number" placeholder="0"/>
+    <div class="modal-footer" style="margin-top:16px;">
+      <button class="btn-cancel" onclick="closeModalKonfirmasiWA()">Batal</button>
+      <button class="btn-primary" style="flex:2;background:#25d366" onclick="submitKirimWA()">Kirim WA</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL KONFIRMASI BLAST WA ── -->
+<div id="modalBlastWA" class="modal-overlay hidden" onclick="closeModalBlastWA()">
+  <div class="modal-sheet" onclick="event.stopPropagation()" style="max-width: 600px;">
+    <div class="modal-title">📲 Konfirmasi Blast WA (Tidak Lancar)</div>
+    <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px;">Data nasabah "Lancar" otomatis dikirim dengan nominal sesuai DB. Berikut daftar nasabah "Selain Lancar", Anda bisa ubah nominalnya lalu klik Kirim Semua.</p>
+    <div id="modalBlastWAError" class="error-msg hidden"></div>
+    <div id="blastListContainer" style="max-height: 40vh; overflow-y: auto; margin-bottom: 16px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 8px;">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModalBlastWA()">Batal</button>
+      <button class="btn-primary" id="btnSubmitBlast" style="flex:2;background:#25d366" onclick="submitBlastWA()">Kirim Semua</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── TOAST ── -->
 <div id="toast" class="toast hidden"></div>
 

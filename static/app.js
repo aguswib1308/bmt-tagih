@@ -319,7 +319,7 @@ function renderTagihanCard(t) {
   const kolLabel = ["","Lancar","DPK","Kurang Lancar","Diragukan","Macet"][t.kolektibilitas] || "Lancar";
 
   const noHpBtn = t.no_hp
-    ? '<button class="btn-sm wa" onclick="kirimReminderWA(' + t.id + ', event)">📲 WA</button>' +
+    ? '<button class="btn-sm wa" onclick="openModalKonfirmasiWA(' + t.id + ', event)">📲 WA</button>' +
       '<button class="btn-sm outline" onclick="openModalHp(\'' + t.no_rekening + '\', event)" style="font-size:11px;padding:5px 8px;">✏️</button>'
     : '<button class="btn-sm outline" onclick="openModalHp(\'' + t.no_rekening + '\', event)">📱 Isi HP</button>';
 
@@ -465,23 +465,46 @@ async function submitHp() {
   renderTagihan();
 }
 
-// ── REMINDER WA ────────────────────────────────────────────────
-async function kirimReminderWA(tagihan_id, e) {
+// ── REMINDER WA (INDIVIDUAL) ──────────────────────────────────
+let activeWAId = null;
+function openModalKonfirmasiWA(id, e) {
   if (e) e.stopPropagation();
-  const btn = e.target;
-  const origText = btn.textContent;
-  btn.textContent = "...";
+  const t = state.tagihan.find(x => x.id === id);
+  if (!t) return;
+  activeWAId = id;
+  
+  document.getElementById("modalWAKonfirmasiInfo").innerHTML =
+    '<div class="info-name">' + t.nama + '</div>' +
+    '<div class="info-row">📋 ' + t.no_rekening + ' · 📱 ' + t.no_hp + '</div>' +
+    '<div class="info-row" style="margin-bottom:12px;">📅 Jatuh tempo: ' + (t.tanggal_jt || "-") + '</div>';
+    
+  document.getElementById("inputWATagihan").value = t.total_tagihan || "";
+  document.getElementById("modalWAError").classList.add("hidden");
+  document.getElementById("modalKonfirmasiWA").classList.remove("hidden");
+}
+
+function closeModalKonfirmasiWA() {
+  document.getElementById("modalKonfirmasiWA").classList.add("hidden");
+}
+
+async function submitKirimWA() {
+  const nominal = document.getElementById("inputWATagihan").value;
+  const btn = document.querySelector("#modalKonfirmasiWA .btn-primary");
   btn.disabled = true;
-
-  const res = await api("/api/reminder/" + tagihan_id, "POST");
-
-  btn.textContent = origText;
+  btn.textContent = "Mengirim...";
+  
+  const res = await api("/api/reminder/" + activeWAId, "POST", { nominal: nominal });
+  
   btn.disabled = false;
-
+  btn.textContent = "Kirim WA";
+  
   if (res.error) {
-    toast("❌ " + res.error, "error");
+    document.getElementById("modalWAError").textContent = res.error;
+    document.getElementById("modalWAError").classList.remove("hidden");
   } else {
+    closeModalKonfirmasiWA();
     toast("📲 Reminder WA terkirim!");
+    renderTagihan(); // refresh if nominal changed
   }
 }
 
@@ -618,14 +641,15 @@ async function doImport(input) {
   toast("✅ Import berhasil!");
 }
 
+let activeBlastData = null;
+
 async function doBlast(hanyaHariIni = false) {
   const resultEl = document.getElementById("blastResult");
-  const label = hanyaHariIni ? "📅 Mengirim hari ini..." : "📲 Mengirim semua...";
-
+  const label = hanyaHariIni ? "📅 Menyiapkan data..." : "📲 Menyiapkan data...";
   resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> ' + label + '</div>';
   resultEl.classList.remove("hidden");
 
-  const res = await api("/api/reminder/blast", "POST", {
+  const res = await api("/api/reminder/preview_blast", "POST", {
     bulan: state.bulan,
     hanya_hari_ini: hanyaHariIni
   });
@@ -634,14 +658,84 @@ async function doBlast(hanyaHariIni = false) {
     resultEl.innerHTML = '<div class="error-msg">❌ ' + res.error + '</div>';
     return;
   }
+  
+  resultEl.classList.add("hidden");
+  activeBlastData = {
+    hanya_hari_ini: hanyaHariIni,
+    lancar: res.lancar,
+    bermasalah: res.bermasalah
+  };
 
-  const info = hanyaHariIni
-    ? "📅 Blast jatuh tempo hari ini (tgl " + new Date().getDate() + ")"
-    : "📲 Blast semua tunggakan";
+  if (res.bermasalah.length === 0) {
+    executeBlastRequest([]);
+  } else {
+    showBlastModal();
+  }
+}
+
+function showBlastModal() {
+  const container = document.getElementById("blastListContainer");
+  
+  container.innerHTML = activeBlastData.bermasalah.map(t => {
+    return '<div class="histori-item" style="padding:10px 0; border-bottom:1px solid var(--gray-200); display:flex; flex-direction:column; gap:6px;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+        '<div>' +
+          '<div class="h-nama" style="font-size:13px;">' + t.nama + '</div>' +
+          '<div class="h-meta" style="font-size:10px;">' + t.no_rekening + ' · Kol: ' + t.kolektibilitas + '</div>' +
+        '</div>' +
+        '<div style="display:flex; align-items:center; gap:4px;">' +
+          '<span style="font-size:12px; font-weight:700;">Rp</span>' +
+          '<input type="number" id="blast_nom_' + t.id + '" value="' + t.total_tagihan + '" style="width:90px; padding:4px 8px; font-size:12px; border:1px solid var(--gray-200); border-radius:4px; text-align:right;" />' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+  
+  document.getElementById("modalBlastWAError").classList.add("hidden");
+  document.getElementById("modalBlastWA").classList.remove("hidden");
+}
+
+function closeModalBlastWA() {
+  document.getElementById("modalBlastWA").classList.add("hidden");
+}
+
+async function submitBlastWA() {
+  const updates = [];
+  activeBlastData.bermasalah.forEach(t => {
+    const el = document.getElementById('blast_nom_' + t.id);
+    if (el) updates.push({ id: t.id, nominal: el.value });
+  });
+  
+  const btn = document.getElementById("btnSubmitBlast");
+  btn.disabled = true;
+  btn.textContent = "Mengirim...";
+  
+  await executeBlastRequest(updates);
+  
+  btn.disabled = false;
+  btn.textContent = "Kirim Semua";
+  closeModalBlastWA();
+}
+
+async function executeBlastRequest(updates) {
+  const resultEl = document.getElementById("blastResult");
+  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> Sedang mengirim blast...</div>';
+  resultEl.classList.remove("hidden");
+
+  const res = await api("/api/reminder/execute_blast", "POST", {
+    bulan: state.bulan,
+    hanya_hari_ini: activeBlastData.hanya_hari_ini,
+    updates: updates
+  });
+
+  if (res.error) {
+    resultEl.innerHTML = '<div class="error-msg">❌ ' + res.error + '</div>';
+    return;
+  }
 
   resultEl.innerHTML =
     '<div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;">' +
-    info + '<br>✅ Terkirim: <strong>' + res.terkirim + '</strong> · ❌ Gagal: <strong>' + res.gagal + '</strong>' +
+    '✅ Blast Selesai<br>Terkirim: <strong>' + res.terkirim + '</strong> · Gagal: <strong>' + res.gagal + '</strong>' +
     '</div>';
   toast("📲 " + res.terkirim + " WA terkirim!");
 }

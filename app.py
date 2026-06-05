@@ -3,6 +3,7 @@ import sqlite3
 import hashlib
 import requests
 import os
+import re
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -28,6 +29,19 @@ def hash_pw(pw):
 
 def format_rp(n):
     return f"Rp {int(n):,}".replace(",", ".")
+
+def format_tgl_jt(tgl_str):
+    if not tgl_str: return "-"
+    tgl_str = str(tgl_str).strip()
+    if re.match(r'^\d{4}-\d{2}-\d{2}', tgl_str):
+        return tgl_str.split('-')[2][:2]
+    if re.match(r'^\d{1,2}[/-]\d{1,2}', tgl_str):
+        return re.split(r'[/-]', tgl_str)[0]
+    m = re.search(r'^(\d{1,2})', tgl_str)
+    if m: return m.group(1)
+    m = re.search(r'(\d{1,2})$', tgl_str)
+    if m: return m.group(1)
+    return tgl_str
 
 def login_required(f):
     @wraps(f)
@@ -382,7 +396,18 @@ def bayar():
 @app.route("/api/reminder/<int:tagihan_id>", methods=["POST"])
 @login_required
 def kirim_reminder(tagihan_id):
+    data = request.json or {}
+    nominal_baru = data.get("nominal")
+
     conn = get_db()
+    if nominal_baru is not None:
+        try:
+            nominal_baru = float(nominal_baru)
+            conn.execute("UPDATE tagihan SET total_tagihan=? WHERE id=?", (nominal_baru, tagihan_id))
+            conn.commit()
+        except:
+            pass
+
     row = conn.execute("""
         SELECT t.*, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
@@ -395,45 +420,86 @@ def kirim_reminder(tagihan_id):
     if not row["no_hp"]:
         return jsonify({"error": "No HP nasabah belum diisi"}), 400
 
-    pesan  = pesan_tagihan(row["nama"], row["total_tagihan"], row["tanggal_jt"], row["marketing_nama"])
+    tgl = format_tgl_jt(row["tanggal_jt"])
+    pesan  = pesan_tagihan(row["nama"], row["total_tagihan"], tgl, row["marketing_nama"])
     result = kirim_wa(row["no_hp"], pesan)
     return jsonify({"success": True, "wa_result": result})
 
 # â”€â”€ BLAST REMINDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-@app.route("/api/reminder/blast", methods=["POST"])
+@app.route("/api/reminder/preview_blast", methods=["POST"])
 @admin_required
-def blast_reminder():
-    import time
-    data         = request.json
-    bulan        = data.get("bulan", datetime.now().strftime("%Y-%m"))
-    marketing_id = data.get("marketing_id", "")
+def preview_blast():
+    data = request.json
+    bulan = data.get("bulan", datetime.now().strftime("%Y-%m"))
     hanya_hari_ini = data.get("hanya_hari_ini", False)
 
-    conn  = get_db()
+    conn = get_db()
     where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != ''"
     params = [bulan]
 
-    if marketing_id:
-        where += " AND n.marketing_id=?"
-        params.append(marketing_id)
+    rows = conn.execute(f"""
+        SELECT t.id, t.total_tagihan, t.kolektibilitas, n.nama, n.no_rekening, n.no_hp, n.marketing_nama, n.tanggal_jt
+        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+        {where}
+        ORDER BY t.kolektibilitas DESC, n.tanggal_jt ASC
+    """, params).fetchall()
+    conn.close()
 
-    # Filter jatuh tempo hari ini
-    if hanya_hari_ini:
-        hari_ini = datetime.now().strftime("%d")
-        where += " AND SUBSTR(n.tanggal_jt, 7, 2) = ?"
-        params.append(hari_ini)
+    lancar = []
+    bermasalah = []
+    hari_ini_str = datetime.now().strftime("%d")
+    hari_ini_str_alt = hari_ini_str[1:] if hari_ini_str.startswith("0") else hari_ini_str
+
+    for r in rows:
+        d = dict(r)
+        tgl = format_tgl_jt(d["tanggal_jt"])
+        if hanya_hari_ini and tgl not in (hari_ini_str, hari_ini_str_alt):
+            continue
+            
+        if d["kolektibilitas"] == 1:
+            lancar.append(d)
+        else:
+            bermasalah.append(d)
+
+    return jsonify({"success": True, "lancar": lancar, "bermasalah": bermasalah})
+
+@app.route("/api/reminder/execute_blast", methods=["POST"])
+@admin_required
+def execute_blast():
+    import time
+    data = request.json
+    bulan = data.get("bulan", datetime.now().strftime("%Y-%m"))
+    hanya_hari_ini = data.get("hanya_hari_ini", False)
+    updates = data.get("updates", [])
+
+    conn = get_db()
+    for up in updates:
+        tag_id = up.get("id")
+        nom = up.get("nominal")
+        if tag_id and nom is not None:
+            conn.execute("UPDATE tagihan SET total_tagihan=? WHERE id=?", (float(nom), tag_id))
+    conn.commit()
+
+    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != ''"
+    params = [bulan]
 
     rows = conn.execute(f"""
         SELECT t.id, t.total_tagihan, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         {where}
-        ORDER BY n.tanggal_jt ASC
     """, params).fetchall()
     conn.close()
 
     terkirim = gagal = 0
+    hari_ini_str = datetime.now().strftime("%d")
+    hari_ini_str_alt = hari_ini_str[1:] if hari_ini_str.startswith("0") else hari_ini_str
+
     for row in rows:
-        pesan  = pesan_tagihan(row["nama"], row["total_tagihan"], row["tanggal_jt"], row["marketing_nama"])
+        tgl = format_tgl_jt(row["tanggal_jt"])
+        if hanya_hari_ini and tgl not in (hari_ini_str, hari_ini_str_alt):
+            continue
+
+        pesan = pesan_tagihan(row["nama"], row["total_tagihan"], tgl, row["marketing_nama"])
         result = kirim_wa(row["no_hp"], pesan)
         if result.get("status") == True:
             terkirim += 1
@@ -441,12 +507,7 @@ def blast_reminder():
             gagal += 1
         time.sleep(5)
 
-    return jsonify({
-        "success": True,
-        "terkirim": terkirim,
-        "gagal": gagal,
-        "hanya_hari_ini": hanya_hari_ini
-    })
+    return jsonify({"success": True, "terkirim": terkirim, "gagal": gagal})
 
 # â”€â”€ UPDATE NO HP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/nasabah/<no_rek>/hp", methods=["PUT"])
