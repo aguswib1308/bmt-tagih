@@ -65,18 +65,36 @@ def kirim_wa(no_hp, pesan):
     except Exception as e:
         return {"error": str(e)}
 
+def get_template_isi(template_id):
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT isi FROM template_pesan WHERE id=?", (template_id,)).fetchone()
+        conn.close()
+        return row["isi"] if row else None
+    except:
+        return None
+
 def pesan_tagihan(nasabah_nama, total, jatuh_tempo, marketing_nama):
-    return f"""Assalamu'alaikum, {nasabah_nama} ðŸ™
+    template = get_template_isi("tagihan")
+    if template:
+        return template.format(
+            nasabah_nama=nasabah_nama,
+            total=format_rp(total),
+            jatuh_tempo=jatuh_tempo,
+            marketing_nama=marketing_nama
+        )
+    return f"""Assalamu'alaikum, {nasabah_nama} 🙏\n\nTagihan: {format_rp(total)}\nJatuh Tempo: {jatuh_tempo}\nMarketing: {marketing_nama}"""
 
-Kami dari *KSPPS BMT Amal Muslim Wonogiri* ingin mengingatkan tagihan Anda:
-
-ðŸ’° *Total Tagihan:* {format_rp(total)}
-ðŸ“… *Jatuh Tempo:* tanggal {jatuh_tempo}
-ðŸ‘¤ *Marketing:* {marketing_nama}
-
-Mohon segera melakukan pembayaran. Terima kasih ðŸ™
-
-_Pesan otomatis - Jangan dibalas_"""
+def pesan_lunas(nasabah_nama, jumlah, marketing_nama):
+    template = get_template_isi("lunas")
+    if template:
+        return template.format(
+            nasabah_nama=nasabah_nama,
+            jumlah=format_rp(jumlah),
+            tgl_sekarang=datetime.now().strftime('%d/%m/%Y %H:%M'),
+            marketing_nama=marketing_nama
+        )
+    return f"""Assalamu'alaikum, {nasabah_nama} 🙏\n\nPembayaran {format_rp(jumlah)} berhasil dicatat.\nMarketing: {marketing_nama}"""
 
 def pesan_lunas(nasabah_nama, jumlah, marketing_nama):
     return f"""Assalamu'alaikum, {nasabah_nama} ðŸ™
@@ -423,6 +441,61 @@ def import_log():
     """).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+    # ── TEMPLATE PESAN ─────────────────────────────────────────────
+@app.route("/api/template", methods=["GET"])
+@admin_required
+def get_template():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS template_pesan (
+            id TEXT PRIMARY KEY,
+            judul TEXT,
+            isi TEXT
+        )
+    """)
+    # Default template kalau belum ada
+    defaults = [
+        ("tagihan", "Reminder Tagihan", """Assalamu'alaikum, {nasabah_nama} 🙏
+
+Kami dari *KSPPS BMT Amal Muslim Wonogiri* ingin mengingatkan tagihan Anda:
+
+💰 *Total Tagihan:* {total}
+📅 *Jatuh Tempo:* tanggal {jatuh_tempo}
+👤 *Marketing:* {marketing_nama}
+
+Mohon segera melakukan pembayaran. Terima kasih 🙏
+
+_Pesan otomatis - Jangan dibalas_"""),
+        ("lunas", "Konfirmasi Lunas", """Assalamu'alaikum, {nasabah_nama} 🙏
+
+✅ Pembayaran Anda telah *berhasil dicatat*!
+
+💰 *Jumlah Bayar:* {jumlah}
+📅 *Tanggal:* {tgl_sekarang}
+👤 *Marketing:* {marketing_nama}
+
+Terima kasih atas kepercayaan Anda 🙏
+*KSPPS BMT Amal Muslim Wonogiri*"""),
+    ]
+    for id, judul, isi in defaults:
+        conn.execute("INSERT OR IGNORE INTO template_pesan VALUES (?,?,?)", (id, judul, isi))
+    conn.commit()
+    rows = conn.execute("SELECT * FROM template_pesan").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/template/<id>", methods=["PUT"])
+@admin_required
+def update_template(id):
+    data = request.json
+    isi = data.get("isi", "").strip()
+    if not isi:
+        return jsonify({"error": "Isi pesan tidak boleh kosong"}), 400
+    conn = get_db()
+    conn.execute("UPDATE template_pesan SET isi=? WHERE id=?", (isi, id))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
 
 # â”€â”€ SERVE FRONTEND â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/")

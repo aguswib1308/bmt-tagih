@@ -537,7 +537,11 @@ async function renderAdmin() {
       '<div id="blastResult" class="hidden" style="margin-top:12px;"></div>' +
     '</div>' +
     '<div class="section-title">Histori Import</div>' +
-    '<div class="card">' + logRows + '</div>';
+'<div class="card">' + logRows + '</div>' +
+'<div class="section-title">Template Pesan WA</div>' +
+'<div id="templateSection"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
+
+loadTemplate();
 }
 
 async function doImport(input) {
@@ -598,3 +602,48 @@ async function doBlast() {
 
 // ── INIT ───────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", initApp);
+async function loadTemplate() {
+  const sec = document.getElementById("templateSection");
+  if (!sec) return;
+
+  const templates = await api("/api/template");
+
+  sec.innerHTML = templates.map((t) =>
+    '<div class="card admin-section" style="margin-bottom:12px;">' +
+      '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">📝 ' + t.judul + '</div>' +
+      '<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px;">Variabel: ' +
+        (t.id === "tagihan"
+          ? '{nasabah_nama} {total} {jatuh_tempo} {marketing_nama}'
+          : '{nasabah_nama} {jumlah} {tgl_sekarang} {marketing_nama}') +
+      '</div>' +
+      '<textarea id="tpl_' + t.id + '" style="width:100%;height:160px;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;">' +
+        t.isi +
+      '</textarea>' +
+      '<button class="btn-primary full" style="margin-top:8px;" onclick="saveTemplate(\'' + t.id + '\')">' +
+        '💾 Simpan Pesan ' + t.judul +
+      '</button>' +
+      '<div id="tpl_result_' + t.id + '" style="margin-top:8px;"></div>' +
+    '</div>'
+  ).join("");
+}
+
+async function saveTemplate(id) {
+  const isi = document.getElementById("tpl_" + id).value.trim();
+  const resultEl = document.getElementById("tpl_result_" + id);
+
+  if (!isi) {
+    resultEl.innerHTML = '<div class="error-msg">❌ Isi pesan tidak boleh kosong</div>';
+    return;
+  }
+
+  const res = await api("/api/template/" + id, "PUT", { isi });
+
+  if (res.error) {
+    resultEl.innerHTML = '<div class="error-msg">❌ ' + res.error + '</div>';
+    return;
+  }
+
+  resultEl.innerHTML = '<div style="background:var(--green-pale);border-radius:8px;padding:10px;font-size:12px;">✅ Template berhasil disimpan!</div>';
+  toast("✅ Template pesan disimpan!");
+  setTimeout(() => { resultEl.innerHTML = ""; }, 3000);
+}
