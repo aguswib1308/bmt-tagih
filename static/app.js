@@ -248,6 +248,10 @@ async function renderTagihan() {
   if (!document.getElementById("tagihanContainer")) {
     main.innerHTML = 
       '<div id="tagihanContainer">' +
+        '<div id="rescheduleBanner" class="hidden" style="background:#fff3cd; color:#856404; padding:10px; border-radius:8px; margin-bottom:12px; font-size:13px; display:flex; justify-content:space-between; align-items:center;">' +
+          '<span>Ada <b id="rescheduleBannerCount">0</b> nasabah perlu konfirmasi reschedule.</span>' +
+          '<button class="btn-sm" style="background:#ffeeba; color:#856404; border:1px solid #ffeeba;" onclick="openModalReschedule()">Lihat</button>' +
+        '</div>' +
         '<div id="bulanBox">' + bulanPickerHtml(state.bulan) + '</div>' +
         '<div class="filter-bar" id="filterStatusBox"></div>' +
         '<div class="filter-bar" id="filterKolekBox"></div>' +
@@ -261,6 +265,8 @@ async function renderTagihan() {
     document.getElementById("tagihanList").innerHTML = '<div class="loading"><div class="spinner"></div> Memuat...</div>';
     document.getElementById("loadMoreBtn").innerHTML = '';
   }
+
+  checkPendingReschedule();
 
   state.tagihanOffset = 0;
   state.tagihan = [];
@@ -349,9 +355,11 @@ function renderTagihanCard(t) {
     ? '<button class="btn-sm outline" style="color:var(--green-dark);border-color:var(--green-mid);" disabled>✅ Lunas</button>'
     : '<button class="btn-sm green" onclick="openModalBayar(' + t.id + ', event)">💰 Bayar</button>';
 
+  const isReschedule = t.is_reschedule === 1 ? '<span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:10px; padding:2px 4px; margin-right:4px;">🔄 Reschedule</span>' : '';
+
   return '<div class="tagihan-card ' + (isLunas ? "lunas" : "belum") + '">' +
     '<div class="tagihan-header">' +
-      '<div><div class="tagihan-nama">' + t.nama + '</div>' +
+      '<div><div class="tagihan-nama">' + isReschedule + t.nama + '</div>' +
       '<div class="tagihan-rek">' + t.no_rekening + ' · ' + (t.marketing_nama || "-") + '</div>' +
       (t.alamat ? '<div style="font-size:10px;color:var(--gray-500);margin-top:2px;">📍 ' + t.alamat + '</div>' : '') +
       '</div>' +
@@ -938,5 +946,58 @@ async function resetPasswordUser(id, username) {
     toast("❌ " + res.error, "error");
   } else {
     toast("✅ Password " + username + " direset ke bmt2026");
+  }
+}
+
+// ── RESCHEDULE LOGIC ───────────────────────────────────────────
+async function checkPendingReschedule() {
+  if (state.user.role !== "admin") return;
+  const banner = document.getElementById("rescheduleBanner");
+  if (!banner) return;
+  try {
+    const res = await api("/api/reschedule/pending");
+    if (res && res.length > 0) {
+      banner.classList.remove("hidden");
+      document.getElementById("rescheduleBannerCount").textContent = res.length;
+      state.pendingReschedule = res;
+    } else {
+      banner.classList.add("hidden");
+      state.pendingReschedule = [];
+    }
+  } catch(e) {}
+}
+
+function openModalReschedule() {
+  const listEl = document.getElementById("rescheduleList");
+  if (!state.pendingReschedule || state.pendingReschedule.length === 0) {
+    listEl.innerHTML = '<p>Tidak ada data.</p>';
+  } else {
+    listEl.innerHTML = state.pendingReschedule.map(n => `
+      <div style="border:1px solid var(--gray-200); padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-weight:600; font-size:13px;">${n.nama}</div>
+          <div style="font-size:11px; color:var(--gray-500);">${n.no_rekening}</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-sm green" onclick="submitReschedule('${n.no_rekening}', 1)">Ya</button>
+          <button class="btn-sm outline" onclick="submitReschedule('${n.no_rekening}', 0)">Bukan</button>
+        </div>
+      </div>
+    `).join('');
+  }
+  document.getElementById("modalReschedule").classList.remove("hidden");
+}
+
+function closeModalReschedule() {
+  document.getElementById("modalReschedule").classList.add("hidden");
+}
+
+async function submitReschedule(no_rekening, is_reschedule) {
+  await api("/api/reschedule/confirm", "POST", { no_rekening, is_reschedule });
+  await checkPendingReschedule();
+  openModalReschedule();
+  if (state.pendingReschedule.length === 0) {
+    closeModalReschedule();
+    renderTagihan();
   }
 }

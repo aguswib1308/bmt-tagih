@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import os
 import hashlib
 from datetime import datetime
@@ -52,6 +52,8 @@ def init_db():
             tanggal_jt TEXT,
             alamat TEXT,
             kabupaten TEXT,
+            tgl_realisasi TEXT,
+            is_reschedule INTEGER DEFAULT 0,
             aktif INTEGER DEFAULT 1
         )
     """)
@@ -179,6 +181,7 @@ def import_excel(filepath, diimport_oleh="admin"):
         COL_PLAFOND = find_col(df, ['plafond_pokok','plafond'])
         COL_KOLEK   = find_col(df, ['kolek','kolektibilitas','kol'])
         COL_TGL_BAYAR = find_col(df, ['tgl_bayar','tanggal_bayar','tgl bayar'])
+        COL_REALISASI = find_col(df, ['tgl_realisasi', 'tanggal_realisasi'])
 
         print(f"Mapping: rek={COL_REK} nama={COL_NAMA} hp={COL_HP} mkt={COL_MKT_ID} saldo={COL_SALDO} t_pok={COL_T_POK} t_mar={COL_T_MAR} kolek={COL_KOLEK}")
 
@@ -237,6 +240,13 @@ def import_excel(filepath, diimport_oleh="admin"):
             alamat  = v(row, COL_ALAMAT)
             kabupaten = v(row, COL_KAB)
 
+            tgl_realisasi = v(row, COL_REALISASI)
+            if tgl_realisasi and tgl_realisasi.endswith(".0"): tgl_realisasi = tgl_realisasi[:-2]
+            
+            is_reschedule = 0
+            if tgl_realisasi == "20251231":
+                is_reschedule = -1
+
             # Kode AO â†’ nama marketing pakai mapping
             kode_ao = v(row, COL_MKT_ID)
             if kode_ao:
@@ -253,15 +263,15 @@ def import_excel(filepath, diimport_oleh="admin"):
                 conn.execute("""
                     UPDATE nasabah SET nama=?, no_hp=COALESCE(NULLIF(no_hp,''), ?),
                     marketing_id=?, marketing_nama=?, tanggal_jt=?,
-                    alamat=?, kabupaten=?, aktif=1 WHERE no_rekening=?
-                """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten, no_rek))
+                    alamat=?, kabupaten=?, tgl_realisasi=?, is_reschedule=CASE WHEN is_reschedule=1 THEN 1 ELSE ? END, aktif=1 WHERE no_rekening=?
+                """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten, tgl_realisasi, is_reschedule, no_rek))
                 nasabah_update += 1
             else:
                 conn.execute("""
                     INSERT INTO nasabah (no_rekening, nama, no_hp, marketing_id,
-                    marketing_nama, tanggal_jt, alamat, kabupaten)
-                    VALUES (?,?,?,?,?,?,?,?)
-                """, (no_rek, nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten))
+                    marketing_nama, tanggal_jt, alamat, kabupaten, tgl_realisasi, is_reschedule)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                """, (no_rek, nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten, tgl_realisasi, is_reschedule))
                 nasabah_baru += 1
 
             # Nilai tagihan

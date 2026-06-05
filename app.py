@@ -325,7 +325,7 @@ def list_tagihan():
         SELECT t.id, t.no_rekening, n.nama, n.no_hp, n.marketing_nama,
                t.saldo_pinjaman, t.tunggakan_pokok, t.tunggakan_margin,
                t.total_tagihan, t.kolektibilitas, t.status, t.keterangan,
-               t.cara_bayar, t.tgl_angsuran, n.tanggal_jt, n.alamat
+               t.cara_bayar, t.tgl_angsuran, n.tanggal_jt, n.alamat, n.is_reschedule
         FROM tagihan t
         JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE {' AND '.join(where)}
@@ -671,7 +671,43 @@ def startup():
 
 startup()
 
+# ── RESCHEDULE ─────────────────────────────────────────────────────────────
+@app.route("/api/reschedule/pending", methods=["GET"])
+@login_required
+def get_pending_reschedule():
+    conn = get_db()
+    rows = conn.execute("SELECT no_rekening, nama FROM nasabah WHERE is_reschedule = -1").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/reschedule/confirm", methods=["POST"])
+@login_required
+def confirm_reschedule():
+    data = request.json
+    no_rek = data.get("no_rekening")
+    is_reschedule = 1 if data.get("is_reschedule") else 0
+    conn = get_db()
+    conn.execute("UPDATE nasabah SET is_reschedule=? WHERE no_rekening=?", (is_reschedule, no_rek))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+# ── AUTO MIGRATION ───────────────────────────────────────────────────────
+def check_db_schema():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("PRAGMA table_info(nasabah)")
+    cols = [r["name"] for r in c.fetchall()]
+    if "tgl_realisasi" not in cols:
+        try: c.execute("ALTER TABLE nasabah ADD COLUMN tgl_realisasi TEXT")
+        except: pass
+    if "is_reschedule" not in cols:
+        try: c.execute("ALTER TABLE nasabah ADD COLUMN is_reschedule INTEGER DEFAULT 0")
+        except: pass
+    conn.commit()
+    conn.close()
+
+check_db_schema()
+
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
-
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)

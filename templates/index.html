@@ -409,6 +409,18 @@
   </div>
 </div>
 
+<!-- ── MODAL RESCHEDULE ── -->
+<div id="modalReschedule" class="modal-overlay hidden" onclick="closeModalReschedule()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-title">🔄 Konfirmasi Reschedule</div>
+    <p style="font-size:13px; color:var(--gray-500); margin-bottom:12px;">Nasabah berikut tercatat realisasi 20251231. Konfirmasi apakah benar Reschedule?</p>
+    <div id="rescheduleList"></div>
+    <div class="modal-footer" style="margin-top:16px;">
+      <button class="btn-cancel" onclick="closeModalReschedule()">Tutup</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL HP ── -->
 <div id="modalHp" class="modal-overlay hidden" onclick="closeModalHp()">
   <div class="modal-sheet" onclick="event.stopPropagation()">
