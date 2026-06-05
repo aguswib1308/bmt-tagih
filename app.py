@@ -237,7 +237,9 @@ def list_tagihan():
     sql_count = f"SELECT COUNT(*) FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening WHERE {' AND '.join(where)}"
     total = conn.execute(sql_count, params).fetchone()[0]
 
-    sql += f" LIMIT {limit} OFFSET {offset}"
+    params.append(limit)
+    params.append(offset)
+    sql += " LIMIT ? OFFSET ?"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
     return jsonify({
