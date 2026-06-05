@@ -1,4 +1,4 @@
-﻿from flask import Flask, request, jsonify, session, render_template, redirect, url_for
+from flask import Flask, request, jsonify, session, render_template, redirect, url_for
 import sqlite3
 import hashlib
 import requests
@@ -95,18 +95,6 @@ def pesan_lunas(nasabah_nama, jumlah, marketing_nama):
             marketing_nama=marketing_nama
         )
     return f"""Assalamu'alaikum, {nasabah_nama} 🙏\n\nPembayaran {format_rp(jumlah)} berhasil dicatat.\nMarketing: {marketing_nama}"""
-
-def pesan_lunas(nasabah_nama, jumlah, marketing_nama):
-    return f"""Assalamu'alaikum, {nasabah_nama} ðŸ™
-
-âœ… Pembayaran Anda telah *berhasil dicatat*!
-
-ðŸ’° *Jumlah Bayar:* {format_rp(jumlah)}
-ðŸ“… *Tanggal:* {datetime.now().strftime('%d/%m/%Y %H:%M')}
-ðŸ‘¤ *Marketing:* {marketing_nama}
-
-Terima kasih atas kepercayaan Anda ðŸ™
-*KSPPS BMT Amal Muslim Wonogiri*"""
 
 # â”€â”€ Health Check (Railway butuh ini) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/health")

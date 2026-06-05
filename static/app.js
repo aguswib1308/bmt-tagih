@@ -95,6 +95,7 @@ function showApp() {
     state.user.nama + (state.user.role === "admin" ? " · Admin" : " · Marketing");
   if (state.user.role === "admin") {
     document.getElementById("navAdmin").style.display = "";
+    document.getElementById("navTemplate").style.display = "";
   }
   navigate("dashboard");
 }
@@ -153,6 +154,7 @@ function renderPage() {
     case "tagihan":   renderTagihan();   break;
     case "histori":   renderHistori();   break;
     case "admin":     renderAdmin();     break;
+    case "template":  renderTemplatePage(); break;
   }
 }
 
@@ -541,11 +543,21 @@ async function renderAdmin() {
   '<div id="blastResult" class="hidden" style="margin-top:12px;"></div>' +
 '</div>';
     '<div class="section-title">Histori Import</div>' +
-'<div class="card">' + logRows + '</div>' +
-'<div class="section-title">Template Pesan WA</div>' +
-'<div id="templateSection"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
+'<div class="card">' + logRows + '</div>';
+}
 
-loadTemplate();
+async function renderTemplatePage() {
+  const main = document.getElementById("mainContent");
+
+  if (state.user.role !== "admin") {
+    main.innerHTML = '<div class="empty-state"><div class="empty-icon">🔒</div><p>Akses ditolak</p></div>';
+    return;
+  }
+
+  main.innerHTML = '<div class="section-title">Template Pesan WA</div>' +
+    '<div id="templateSection"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
+
+  loadTemplate();
 }
 
 async function doImport(input) {
