@@ -1,13 +1,13 @@
-﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   BMT Amal Muslim â€” app.js
+/* ═══════════════════════════════════════════════════════════════
+   BMT Amal Muslim — app.js
    Frontend logic: auth, dashboard, tagihan, histori, admin
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════════════════════════ */
 
-// â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── STATE ──────────────────────────────────────────────────────
 const state = {
   user: null,
   page: "dashboard",
-  bulan: "2026-06",
+  bulan: new Date().toISOString().slice(0, 7),
   tagihan: [],
   filterStatus: "",
   filterKolek: "",
@@ -19,7 +19,7 @@ const state = {
   tagihanLoading: false,
 };
 
-// â”€â”€ FORMAT HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── FORMAT HELPERS ─────────────────────────────────────────────
 function rp(n) {
   if (!n && n !== 0) return "Rp 0";
   return "Rp " + parseInt(n).toLocaleString("id-ID");
@@ -35,44 +35,42 @@ function rpShort(n) {
 
 function fmtTgl(tglStr) {
   if (!tglStr) return "-";
-  // ISO datetime "2026-05-15 10:30:00" â†’ "15/05/2026 10:30"
   const d = new Date(tglStr.replace(" ", "T"));
   if (isNaN(d)) return tglStr;
   return d.toLocaleDateString("id-ID") + " " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 }
 
 function bulanLabel(b) {
-  // "2026-05" â†’ "Mei 2026"
   const [y, m] = b.split("-");
   const namaBulan = ["","Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agt","Sep","Okt","Nov","Des"];
   return (namaBulan[parseInt(m)] || m) + " " + y;
 }
 
-// â”€â”€ API HELPER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── API HELPER ─────────────────────────────────────────────────
 async function api(path, method = "GET", body = null, isForm = false) {
   const opts = { method, credentials: "include" };
   if (body && !isForm) {
     opts.headers = { "Content-Type": "application/json" };
     opts.body = JSON.stringify(body);
   } else if (isForm) {
-    opts.body = body; // FormData
+    opts.body = body;
   }
   const res = await fetch(path, opts);
   return res.json();
 }
 
-// â”€â”€ TOAST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── TOAST ──────────────────────────────────────────────────────
 let _toastTimer = null;
 function toast(msg, type = "success") {
   const el = document.getElementById("toast");
   el.textContent = msg;
-  el.className = `toast ${type}`;
+  el.className = "toast " + type;
   el.classList.remove("hidden");
   if (_toastTimer) clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.add("hidden"), 3000);
 }
 
-// â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── AUTH ───────────────────────────────────────────────────────
 async function initApp() {
   const me = await api("/api/me");
   if (me.login) {
@@ -86,21 +84,15 @@ async function initApp() {
 function showLogin() {
   document.getElementById("loginScreen").classList.remove("hidden");
   document.getElementById("appShell").classList.add("hidden");
-  // Enter key on password field
-  document.getElementById("loginPass").onkeydown = (e) => {
-    if (e.key === "Enter") doLogin();
-  };
-  document.getElementById("loginUser").onkeydown = (e) => {
-    if (e.key === "Enter") document.getElementById("loginPass").focus();
-  };
+  document.getElementById("loginPass").onkeydown = (e) => { if (e.key === "Enter") doLogin(); };
+  document.getElementById("loginUser").onkeydown = (e) => { if (e.key === "Enter") document.getElementById("loginPass").focus(); };
 }
 
 function showApp() {
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("appShell").classList.remove("hidden");
   document.getElementById("topbarUser").textContent =
-    state.user.nama + (state.user.role === "admin" ? " Â· Admin" : " Â· Marketing");
-  // Tampilkan menu admin kalau role admin
+    state.user.nama + (state.user.role === "admin" ? " · Admin" : " · Marketing");
   if (state.user.role === "admin") {
     document.getElementById("navAdmin").style.display = "";
   }
@@ -125,7 +117,7 @@ async function doLogin() {
 
   const res = await api("/api/login", "POST", { username, password });
 
-  btn.textContent = "Masuk â†’";
+  btn.textContent = "Masuk →";
   btn.disabled = false;
 
   if (res.error) {
@@ -144,10 +136,9 @@ async function doLogout() {
   showLogin();
 }
 
-// â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── NAVIGATION ─────────────────────────────────────────────────
 function navigate(page) {
   state.page = page;
-  // Update nav active state
   document.querySelectorAll(".nav-item").forEach((el) => {
     el.classList.toggle("active", el.dataset.page === page);
   });
@@ -165,20 +156,18 @@ function renderPage() {
   }
 }
 
-// â”€â”€ BULAN PICKER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── BULAN PICKER ───────────────────────────────────────────────
 function bulanPickerHtml(currentBulan) {
-  // Generate 6 bulan terakhir + 1 ke depan
   const options = [];
-  const now = new Date(); // otomatis ikut bulan sekarang
+  const now = new Date();
   for (let i = -5; i <= 1; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const val = d.toISOString().slice(0, 7);
     const label = bulanLabel(val);
-    options.push(`<option value="${val}" ${val === currentBulan ? "selected" : ""}>${label}</option>`);
+    options.push('<option value="' + val + '"' + (val === currentBulan ? " selected" : "") + '>' + label + '</option>');
   }
-  return `<select class="search-bar" style="margin-bottom:12px;font-weight:700;" onchange="changeBulan(this.value)">
-    ${options.join("")}
-  </select>`;
+  return '<select class="search-bar" style="margin-bottom:12px;font-weight:700;" onchange="changeBulan(this.value)">' +
+    options.join("") + '</select>';
 }
 
 function changeBulan(val) {
@@ -186,126 +175,90 @@ function changeBulan(val) {
   renderPage();
 }
 
-// â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── DASHBOARD ──────────────────────────────────────────────────
 async function renderDashboard() {
   const main = document.getElementById("mainContent");
-  const data = await api(`/api/dashboard?bulan=${state.bulan}`);
+  const data = await api("/api/dashboard?bulan=" + state.bulan);
 
   if (data.error) {
-    main.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+    main.innerHTML = '<div class="empty-state"><p>' + data.error + '</p></div>';
     return;
   }
 
   const s = data.stats;
-  const pct = s.total_tagihan > 0
-    ? Math.round((s.total_terkumpul / s.total_tagihan) * 100)
-    : 0;
+  const pct = s.total_tagihan > 0 ? Math.round((s.total_terkumpul / s.total_tagihan) * 100) : 0;
 
   let rekapHtml = "";
   if (state.user.role === "admin" && data.rekap_marketing.length > 0) {
     const rows = data.rekap_marketing.map((r) => {
       const pctM = r.total > 0 ? Math.round((r.lunas / r.total) * 100) : 0;
-      return `<div class="rekap-row">
-        <div>
-          <div class="rekap-name">${r.marketing_nama || "-"}</div>
-          <div class="rekap-count">${r.lunas}/${r.total} nasabah Â· ${rpShort(r.nominal_lunas)}</div>
-        </div>
-        <div class="rekap-badge">${pctM}%</div>
-      </div>`;
+      return '<div class="rekap-row"><div>' +
+        '<div class="rekap-name">' + (r.marketing_nama || "-") + '</div>' +
+        '<div class="rekap-count">' + r.lunas + "/" + r.total + " nasabah · " + rpShort(r.nominal_lunas) + '</div>' +
+        '</div><div class="rekap-badge">' + pctM + '%</div></div>';
     }).join("");
-
-    rekapHtml = `
-      <div class="section-title">Rekap per Marketing</div>
-      <div class="card">${rows}</div>`;
+    rekapHtml = '<div class="section-title">Rekap per Marketing</div><div class="card">' + rows + '</div>';
   }
 
-  main.innerHTML = `
-    ${bulanPickerHtml(state.bulan)}
-
-    <div class="stats-hero">
-      <div class="stats-hero-label">Total Tagihan ${bulanLabel(state.bulan)}</div>
-      <div class="stats-hero-value">${rpShort(s.total_tagihan)}</div>
-      <div class="stats-hero-sub">${s.total_nasabah} nasabah aktif</div>
-      <div class="progress-wrap" style="margin-top:14px;">
-        <div class="progress-bar" style="width:${pct}%"></div>
-      </div>
-      <div class="progress-label">
-        <span>Terkumpul ${pct}%</span>
-        <span>${rpShort(s.total_terkumpul)}</span>
-      </div>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card green">
-        <div class="stat-label">Sudah Bayar</div>
-        <div class="stat-value">${s.sudah_bayar}</div>
-        <div class="stat-sub">${rpShort(s.total_terkumpul)}</div>
-      </div>
-      <div class="stat-card red">
-        <div class="stat-label">Belum Bayar</div>
-        <div class="stat-value">${s.belum_bayar}</div>
-        <div class="stat-sub">${rpShort(s.total_tunggakan)}</div>
-      </div>
-    </div>
-
-    ${rekapHtml}
-
-    <button class="btn-primary full" onclick="navigate('tagihan')">
-      ðŸ“‹ Lihat Semua Tagihan
-    </button>
-  `;
+  main.innerHTML =
+    bulanPickerHtml(state.bulan) +
+    '<div class="stats-hero">' +
+      '<div class="stats-hero-label">Total Tagihan ' + bulanLabel(state.bulan) + '</div>' +
+      '<div class="stats-hero-value">' + rpShort(s.total_tagihan) + '</div>' +
+      '<div class="stats-hero-sub">' + s.total_nasabah + ' nasabah aktif</div>' +
+      '<div class="progress-wrap" style="margin-top:14px;"><div class="progress-bar" style="width:' + pct + '%"></div></div>' +
+      '<div class="progress-label"><span>Terkumpul ' + pct + '%</span><span>' + rpShort(s.total_terkumpul) + '</span></div>' +
+    '</div>' +
+    '<div class="stats-grid">' +
+      '<div class="stat-card green"><div class="stat-label">Sudah Bayar</div><div class="stat-value">' + s.sudah_bayar + '</div><div class="stat-sub">' + rpShort(s.total_terkumpul) + '</div></div>' +
+      '<div class="stat-card red"><div class="stat-label">Belum Bayar</div><div class="stat-value">' + s.belum_bayar + '</div><div class="stat-sub">' + rpShort(s.total_tunggakan) + '</div></div>' +
+    '</div>' +
+    rekapHtml +
+    '<button class="btn-primary full" onclick="navigate(\'tagihan\')">📋 Lihat Semua Tagihan</button>';
 }
 
-// â”€â”€ TAGIHAN LIST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// â”€â”€ STATE tambahan untuk infinite scroll
-state.tagihanOffset = 0;
-state.tagihanTotal  = 0;
-state.tagihanLoading = false;
-
+// ── TAGIHAN LIST ───────────────────────────────────────────────
 async function renderTagihan() {
   const main = document.getElementById("mainContent");
-  state.tagihanOffset  = 0;
-  state.tagihan        = [];
+  state.tagihanOffset = 0;
+  state.tagihan = [];
 
-  let url = `/api/tagihan?bulan=${state.bulan}&limit=50&offset=0`;
-if (state.filterStatus) url += `&status=${state.filterStatus}`;
-if (state.filterKolek)  url += `&kolek=${state.filterKolek}`;   // â† tambah ini
-if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
+  let url = "/api/tagihan?bulan=" + state.bulan + "&limit=50&offset=0";
+  if (state.filterStatus) url += "&status=" + state.filterStatus;
+  if (state.filterKolek)  url += "&kolek=" + state.filterKolek;
+  if (state.searchQ)      url += "&q=" + encodeURIComponent(state.searchQ);
 
   const res = await api(url);
-  state.tagihan      = res.data || [];
+  state.tagihan = res.data || [];
   state.tagihanTotal = res.total || 0;
   state.tagihanOffset = state.tagihan.length;
 
-  const cards = rows.length === 0
-    ? `<div class="empty-state"><div class="empty-icon">ðŸ”­</div><p>Tidak ada tagihan ditemukan</p></div>`
+  const cards = state.tagihan.length === 0
+    ? '<div class="empty-state"><div class="empty-icon">🔭</div><p>Tidak ada tagihan ditemukan</p></div>'
     : state.tagihan.map(renderTagihanCard).join("");
 
-  main.innerHTML = `
-    ${bulanPickerHtml(state.bulan)}
-    <div class="filter-bar">
-      ${["","BELUM","LUNAS"].map((s) => {
-        const label = s===""?"Semua":s==="BELUM"?"Belum Bayar":"Lunas";
-        return `<button class="filter-chip ${state.filterStatus===s?"active":""}"
-          onclick="setFilter('${s}')">${label}</button>`;
-      }).join("")}
-    </div>
-    <div class="filter-bar">
-      ${[["","Semua Kolek"],["1","âœ… Lancar"],["2","âš ï¸ DPK"],["3","ðŸŸ  KL"],["4","ðŸ”´ Diragukan"],["5","â›” Macet"]].map(([k,label]) =>
-        `<button class="filter-chip ${state.filterKolek===k?"active":""}"
-          onclick="setFilterKolek('${k}')">${label}</button>`
-      ).join("")}
-    </div>
-    <input class="search-bar" type="search" placeholder="ðŸ” Cari nama / no rekening..."
-      value="${state.searchQ}" oninput="setSearch(this.value)"/>
-    <div class="section-title" id="tagihanCount">${state.tagihanTotal} tagihan Â· tampil ${state.tagihan.length}</div>
-    <div id="tagihanList">${cards}</div>
-    <div id="loadMoreBtn" style="text-align:center;padding:16px;">
-      ${state.tagihanOffset < state.tagihanTotal
-        ? `<button class="filter-chip" onclick="loadMoreTagihan()">â¬‡ï¸ Load lebih banyak (${state.tagihanTotal - state.tagihanOffset} lagi)</button>`
-        : ""}
-    </div>
-  `;
+  const filterStatus = ["","BELUM","LUNAS"].map((s) => {
+    const label = s === "" ? "Semua" : s === "BELUM" ? "Belum Bayar" : "Lunas";
+    return '<button class="filter-chip ' + (state.filterStatus === s ? "active" : "") + '" onclick="setFilter(\'' + s + '\')">' + label + '</button>';
+  }).join("");
+
+  const filterKolek = [["","Semua"],["1","✅ Lancar"],["2","⚠️ DPK"],["3","🟠 KL"],["4","🔴 Diragukan"],["5","⛔ Macet"]].map(([k, label]) => {
+    return '<button class="filter-chip ' + (state.filterKolek === k ? "active" : "") + '" onclick="setFilterKolek(\'' + k + '\')">' + label + '</button>';
+  }).join("");
+
+  const sisaData = state.tagihanTotal - state.tagihanOffset;
+  const loadMoreHtml = sisaData > 0
+    ? '<button class="filter-chip" onclick="loadMoreTagihan()">⬇️ Load lebih (' + sisaData + ' lagi)</button>'
+    : "";
+
+  main.innerHTML =
+    bulanPickerHtml(state.bulan) +
+    '<div class="filter-bar">' + filterStatus + '</div>' +
+    '<div class="filter-bar">' + filterKolek + '</div>' +
+    '<input class="search-bar" type="search" placeholder="🔍 Cari nama / no rekening..." value="' + state.searchQ + '" oninput="setSearch(this.value)"/>' +
+    '<div class="section-title" id="tagihanCount">' + state.tagihanTotal + ' tagihan · tampil ' + state.tagihan.length + '</div>' +
+    '<div id="tagihanList">' + cards + '</div>' +
+    '<div id="loadMoreBtn" style="text-align:center;padding:16px;">' + loadMoreHtml + '</div>';
 }
 
 async function loadMoreTagihan() {
@@ -314,12 +267,12 @@ async function loadMoreTagihan() {
 
   state.tagihanLoading = true;
   const btn = document.getElementById("loadMoreBtn");
-  if (btn) btn.innerHTML = `<div class="loading"><div class="spinner"></div> Memuat...</div>`;
+  if (btn) btn.innerHTML = '<div class="loading"><div class="spinner"></div> Memuat...</div>';
 
-  let url = `/api/tagihan?bulan=${state.bulan}&limit=50&offset=${state.tagihanOffset}`;
-if (state.filterStatus) url += `&status=${state.filterStatus}`;
-if (state.filterKolek)  url += `&kolek=${state.filterKolek}`;   // â† tambah ini
-if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
+  let url = "/api/tagihan?bulan=" + state.bulan + "&limit=50&offset=" + state.tagihanOffset;
+  if (state.filterStatus) url += "&status=" + state.filterStatus;
+  if (state.filterKolek)  url += "&kolek=" + state.filterKolek;
+  if (state.searchQ)      url += "&q=" + encodeURIComponent(state.searchQ);
 
   const res = await api(url);
   const newData = res.data || [];
@@ -330,13 +283,13 @@ if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
   if (list) list.innerHTML += newData.map(renderTagihanCard).join("");
 
   const count = document.getElementById("tagihanCount");
-  if (count) count.textContent = `${state.tagihanTotal} tagihan Â· tampil ${state.tagihan.length}`;
+  if (count) count.textContent = state.tagihanTotal + " tagihan · tampil " + state.tagihan.length;
 
+  const sisa = state.tagihanTotal - state.tagihanOffset;
   if (btn) {
-    const sisa = state.tagihanTotal - state.tagihanOffset;
     btn.innerHTML = sisa > 0
-      ? `<button class="filter-chip" onclick="loadMoreTagihan()">â¬‡ï¸ Load lebih banyak (${sisa} lagi)</button>`
-      : `<p style="color:var(--gray-400);font-size:12px;">âœ… Semua data sudah ditampilkan</p>`;
+      ? '<button class="filter-chip" onclick="loadMoreTagihan()">⬇️ Load lebih (' + sisa + ' lagi)</button>'
+      : '<p style="color:var(--gray-400);font-size:12px;">✅ Semua data ditampilkan</p>';
   }
 
   state.tagihanLoading = false;
@@ -344,45 +297,42 @@ if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
 
 function renderTagihanCard(t) {
   const isLunas = t.status === "LUNAS";
-  const kolClass = `kol-${t.kolektibilitas || 1}`;
-  const kolLabel = ["", "Lancar", "DPK", "Kurang Lancar", "Diragukan", "Macet"][t.kolektibilitas] || "Lancar";
+  const kolClass = "kol-" + (t.kolektibilitas || 1);
+  const kolLabel = ["","Lancar","DPK","Kurang Lancar","Diragukan","Macet"][t.kolektibilitas] || "Lancar";
 
   const noHpBtn = t.no_hp
-    ? `<button class="btn-sm wa" onclick="kirimReminderWA(${t.id}, event)">ðŸ“² WA</button>`
-    : `<button class="btn-sm outline" onclick="openModalHp('${t.no_rekening}', event)">ðŸ“± Isi HP</button>`;
+    ? '<button class="btn-sm wa" onclick="kirimReminderWA(' + t.id + ', event)">📲 WA</button>'
+    : '<button class="btn-sm outline" onclick="openModalHp(\'' + t.no_rekening + '\', event)">📱 Isi HP</button>';
 
   const bayarBtn = isLunas
-    ? `<button class="btn-sm outline" style="color:var(--green-dark);border-color:var(--green-mid);" disabled>âœ… Lunas</button>`
-    : `<button class="btn-sm green" onclick="openModalBayar(${t.id}, event)">ðŸ’° Bayar</button>`;
+    ? '<button class="btn-sm outline" style="color:var(--green-dark);border-color:var(--green-mid);" disabled>✅ Lunas</button>'
+    : '<button class="btn-sm green" onclick="openModalBayar(' + t.id + ', event)">💰 Bayar</button>';
 
-  return `
-    <div class="tagihan-card ${isLunas ? "lunas" : "belum"}">
-      <div class="tagihan-header">
-        <div>
-          <div class="tagihan-nama">${t.nama}</div>
-          <div class="tagihan-rek">${t.no_rekening} Â· ${t.marketing_nama || "-"}</div>
-        </div>
-        <div class="tagihan-total">${rp(t.total_tagihan)}</div>
-      </div>
-      <div class="tagihan-meta">
-        <span class="badge ${kolClass}">${kolLabel}</span>
-        ${isLunas
-          ? `<span class="badge badge-green">âœ… LUNAS Â· ${t.cara_bayar || ""}</span>`
-          : `<span class="badge badge-red">â³ BELUM</span>`}
-        <span class="badge badge-gray">JT: ${t.tanggal_jt || "-"}</span>
-      </div>
-      <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px;">
-        Pokok: ${rp(t.tunggakan_pokok)} Â· Margin: ${rp(t.tunggakan_margin)}
-      </div>
-      <div class="tagihan-actions">
-        ${bayarBtn}
-        ${noHpBtn}
-      </div>
-    </div>`;
+  return '<div class="tagihan-card ' + (isLunas ? "lunas" : "belum") + '">' +
+    '<div class="tagihan-header">' +
+      '<div><div class="tagihan-nama">' + t.nama + '</div>' +
+      '<div class="tagihan-rek">' + t.no_rekening + ' · ' + (t.marketing_nama || "-") + '</div></div>' +
+      '<div class="tagihan-total">' + rp(t.total_tagihan) + '</div>' +
+    '</div>' +
+    '<div class="tagihan-meta">' +
+      '<span class="badge ' + kolClass + '">' + kolLabel + '</span>' +
+      (isLunas
+        ? '<span class="badge badge-green">✅ LUNAS · ' + (t.cara_bayar || "") + '</span>'
+        : '<span class="badge badge-red">⏳ BELUM</span>') +
+      '<span class="badge badge-gray">JT: ' + (t.tanggal_jt || "-") + '</span>' +
+    '</div>' +
+    '<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px;">Pokok: ' + rp(t.tunggakan_pokok) + ' · Margin: ' + rp(t.tunggakan_margin) + '</div>' +
+    '<div class="tagihan-actions">' + bayarBtn + noHpBtn + '</div>' +
+    '</div>';
 }
 
 function setFilter(status) {
   state.filterStatus = status;
+  renderTagihan();
+}
+
+function setFilterKolek(k) {
+  state.filterKolek = k;
   renderTagihan();
 }
 
@@ -392,11 +342,8 @@ function setSearch(q) {
   if (_searchTimer) clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => renderTagihan(), 400);
 }
-function setFilterKolek(k) {
-  state.filterKolek = k;
-  renderTagihan();
-}
-// â”€â”€ MODAL BAYAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+// ── MODAL BAYAR ────────────────────────────────────────────────
 function openModalBayar(tagihan_id, e) {
   if (e) e.stopPropagation();
   const t = state.tagihan.find((x) => x.id === tagihan_id);
@@ -404,21 +351,18 @@ function openModalBayar(tagihan_id, e) {
 
   state.activeBayarId = tagihan_id;
 
-  document.getElementById("modalNasabahInfo").innerHTML = `
-    <div class="info-name">${t.nama}</div>
-    <div class="info-row">ðŸ“‹ ${t.no_rekening} Â· ${t.marketing_nama || "-"}</div>
-    <div class="info-row">ðŸ“… Jatuh tempo: ${t.tanggal_jt || "-"}</div>
-    <div class="info-row" style="margin-top:6px;">Pokok: ${rp(t.tunggakan_pokok)} Â· Margin: ${rp(t.tunggakan_margin)}</div>
-    <div class="info-total">${rp(t.total_tagihan)}</div>
-  `;
+  document.getElementById("modalNasabahInfo").innerHTML =
+    '<div class="info-name">' + t.nama + '</div>' +
+    '<div class="info-row">📋 ' + t.no_rekening + ' · ' + (t.marketing_nama || "-") + '</div>' +
+    '<div class="info-row">📅 Jatuh tempo: ' + (t.tanggal_jt || "-") + '</div>' +
+    '<div class="info-row" style="margin-top:6px;">Pokok: ' + rp(t.tunggakan_pokok) + ' · Margin: ' + rp(t.tunggakan_margin) + '</div>' +
+    '<div class="info-total">' + rp(t.total_tagihan) + '</div>';
 
-  // Pre-fill jumlah dengan total tagihan
   document.getElementById("inputJumlah").value = t.total_tagihan || "";
   document.getElementById("inputCaraBayar").value = "TUNAI";
   document.getElementById("inputCatatan").value = "";
   document.getElementById("inputNoHp").value = t.no_hp || "";
   document.getElementById("modalError").classList.add("hidden");
-
   document.getElementById("modalBayar").classList.remove("hidden");
 }
 
@@ -441,24 +385,18 @@ async function submitBayar() {
     return;
   }
 
-  // Update no HP dulu kalau diisi
   const t = state.tagihan.find((x) => x.id === state.activeBayarId);
   if (t && no_hp && no_hp !== t.no_hp) {
-    await api(`/api/nasabah/${t.no_rekening}/hp`, "PUT", { no_hp });
+    await api("/api/nasabah/" + t.no_rekening + "/hp", "PUT", { no_hp });
   }
 
   const btn = document.querySelector("#modalBayar .btn-primary");
   btn.textContent = "Menyimpan...";
   btn.disabled = true;
 
-  const res = await api("/api/bayar", "POST", {
-    tagihan_id: state.activeBayarId,
-    jumlah,
-    cara_bayar,
-    catatan,
-  });
+  const res = await api("/api/bayar", "POST", { tagihan_id: state.activeBayarId, jumlah, cara_bayar, catatan });
 
-  btn.textContent = "ðŸ’¾ Simpan";
+  btn.textContent = "💾 Simpan";
   btn.disabled = false;
 
   if (res.error) {
@@ -468,12 +406,11 @@ async function submitBayar() {
   }
 
   closeModal();
-  toast("âœ… " + (res.message || "Pembayaran berhasil dicatat!"));
-  // Reload tagihan list
+  toast("✅ " + (res.message || "Pembayaran berhasil dicatat!"));
   renderTagihan();
 }
 
-// â”€â”€ MODAL HP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── MODAL HP ───────────────────────────────────────────────────
 function openModalHp(no_rekening, e) {
   if (e) e.stopPropagation();
   state.activeHpRek = no_rekening;
@@ -494,22 +431,22 @@ async function submitHp() {
   btn.textContent = "Menyimpan...";
   btn.disabled = true;
 
-  const res = await api(`/api/nasabah/${state.activeHpRek}/hp`, "PUT", { no_hp });
+  const res = await api("/api/nasabah/" + state.activeHpRek + "/hp", "PUT", { no_hp });
 
   btn.textContent = "Simpan";
   btn.disabled = false;
 
   if (res.error) {
-    toast("âŒ Gagal simpan HP: " + res.error, "error");
+    toast("❌ Gagal simpan HP: " + res.error, "error");
     return;
   }
 
   closeModalHp();
-  toast("ðŸ“± No HP berhasil diupdate");
+  toast("📱 No HP berhasil diupdate");
   renderTagihan();
 }
 
-// â”€â”€ REMINDER WA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── REMINDER WA ────────────────────────────────────────────────
 async function kirimReminderWA(tagihan_id, e) {
   if (e) e.stopPropagation();
   const btn = e.target;
@@ -517,102 +454,89 @@ async function kirimReminderWA(tagihan_id, e) {
   btn.textContent = "...";
   btn.disabled = true;
 
-  const res = await api(`/api/reminder/${tagihan_id}`, "POST");
+  const res = await api("/api/reminder/" + tagihan_id, "POST");
 
   btn.textContent = origText;
   btn.disabled = false;
 
   if (res.error) {
-    toast("âŒ " + res.error, "error");
+    toast("❌ " + res.error, "error");
   } else {
-    toast("ðŸ“² Reminder WA terkirim!");
+    toast("📲 Reminder WA terkirim!");
   }
 }
 
-// â”€â”€ HISTORI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── HISTORI ────────────────────────────────────────────────────
 async function renderHistori() {
   const main = document.getElementById("mainContent");
   const rows = await api("/api/histori");
 
   if (!rows.length) {
-    main.innerHTML = `<div class="empty-state"><div class="empty-icon">ðŸ•</div><p>Belum ada histori pembayaran</p></div>`;
+    main.innerHTML = '<div class="empty-state"><div class="empty-icon">🕐</div><p>Belum ada histori pembayaran</p></div>';
     return;
   }
 
-  const items = rows.map((p) => `
-    <div class="histori-item">
-      <div class="histori-left">
-        <div class="h-nama">${p.nama}</div>
-        <div class="h-meta">${p.no_rekening} Â· ${p.cara_bayar || "TUNAI"} Â· ${p.dicatat_oleh || "-"}</div>
-        <div class="h-meta">${fmtTgl(p.tanggal)}</div>
-      </div>
-      <div class="histori-right">
-        <div class="h-jumlah">${rpShort(p.jumlah)}</div>
-        <div class="h-cara">${p.catatan || ""}</div>
-      </div>
-    </div>
-  `).join("");
+  const items = rows.map((p) =>
+    '<div class="histori-item">' +
+      '<div class="histori-left">' +
+        '<div class="h-nama">' + p.nama + '</div>' +
+        '<div class="h-meta">' + p.no_rekening + ' · ' + (p.cara_bayar || "TUNAI") + ' · ' + (p.dicatat_oleh || "-") + '</div>' +
+        '<div class="h-meta">' + fmtTgl(p.tanggal) + '</div>' +
+      '</div>' +
+      '<div class="histori-right">' +
+        '<div class="h-jumlah">' + rpShort(p.jumlah) + '</div>' +
+        '<div class="h-cara">' + (p.catatan || "") + '</div>' +
+      '</div>' +
+    '</div>'
+  ).join("");
 
-  main.innerHTML = `
-    <div class="section-title">${rows.length} transaksi terakhir</div>
-    <div class="card">${items}</div>
-  `;
+  main.innerHTML = '<div class="section-title">' + rows.length + ' transaksi terakhir</div><div class="card">' + items + '</div>';
 }
 
-// â”€â”€ ADMIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── ADMIN ──────────────────────────────────────────────────────
 async function renderAdmin() {
   const main = document.getElementById("mainContent");
 
   if (state.user.role !== "admin") {
-    main.innerHTML = `<div class="empty-state"><div class="empty-icon">ðŸ”’</div><p>Akses ditolak</p></div>`;
+    main.innerHTML = '<div class="empty-state"><div class="empty-icon">🔒</div><p>Akses ditolak</p></div>';
     return;
   }
 
-  // Load histori import
   const logs = await api("/api/import/log");
 
   const logRows = logs.length === 0
-    ? `<div class="empty-state" style="padding:24px"><p>Belum ada histori import</p></div>`
-    : logs.map((l) => `
-      <div class="histori-item">
-        <div class="histori-left">
-          <div class="h-nama">${bulanLabel(l.bulan)}</div>
-          <div class="h-meta">+${l.nasabah_baru} baru Â· ~${l.nasabah_update} update Â· ${l.nasabah_nonaktif} nonaktif</div>
-          <div class="h-meta">${l.tagihan_baru} tagihan baru Â· ${fmtTgl(l.waktu)}</div>
-        </div>
-        <div class="histori-right">
-          <div class="h-cara">${l.diimport_oleh}</div>
-        </div>
-      </div>`).join("");
+    ? '<div class="empty-state" style="padding:24px"><p>Belum ada histori import</p></div>'
+    : logs.map((l) =>
+        '<div class="histori-item">' +
+          '<div class="histori-left">' +
+            '<div class="h-nama">' + bulanLabel(l.bulan) + '</div>' +
+            '<div class="h-meta">+' + l.nasabah_baru + ' baru · ~' + l.nasabah_update + ' update · ' + l.nasabah_nonaktif + ' nonaktif</div>' +
+            '<div class="h-meta">' + l.tagihan_baru + ' tagihan baru · ' + fmtTgl(l.waktu) + '</div>' +
+          '</div>' +
+          '<div class="histori-right"><div class="h-cara">' + l.diimport_oleh + '</div></div>' +
+        '</div>'
+      ).join("");
 
-  main.innerHTML = `
-    <!-- Import Excel -->
-    <div class="section-title">Import Data Excel</div>
-    <div class="card admin-section">
-      <div class="import-box" onclick="document.getElementById('fileImport').click()">
-        <div style="font-size:36px">ðŸ“‚</div>
-        <p>Tap untuk pilih file Excel tagihan</p>
-        <p style="font-size:11px;margin-top:4px;">(.xlsx, .xls)</p>
-      </div>
-      <input type="file" id="fileImport" accept=".xlsx,.xls" style="display:none" onchange="doImport(this)"/>
-      <div id="importProgress" class="hidden" style="margin-top:12px;"></div>
-    </div>
-
-    <!-- Blast WA -->
-    <div class="section-title">Blast Reminder WA</div>
-    <div class="card admin-section">
-      <p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">
-        Kirim reminder ke semua nasabah BELUM BAYAR yang punya no HP.
-      </p>
-      ${bulanPickerHtml(state.bulan)}
-      <button class="btn-primary full" onclick="doBlast()">ðŸ“² Kirim Blast WA</button>
-      <div id="blastResult" class="hidden" style="margin-top:12px;"></div>
-    </div>
-
-    <!-- Histori Import -->
-    <div class="section-title">Histori Import</div>
-    <div class="card">${logRows}</div>
-  `;
+  main.innerHTML =
+    '<div class="section-title">Import Data Excel</div>' +
+    '<div class="card admin-section">' +
+      '<div class="import-box" onclick="document.getElementById(\'fileImport\').click()">' +
+        '<div style="font-size:36px">📂</div>' +
+        '<p>Tap untuk pilih file Excel tagihan</p>' +
+        '<p style="font-size:11px;margin-top:4px;">(.xlsx, .xls)</p>' +
+      '</div>' +
+      '<input type="file" id="fileImport" accept=".xlsx,.xls" style="display:none" onchange="doImport(this)"/>' +
+      '<div id="importProgress" class="hidden" style="margin-top:12px;"></div>' +
+    '</div>' +
+    '<div class="section-title">Blast Reminder WA</div>' +
+    '<div class="card admin-section">' +
+      '<p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Kirim reminder ke semua nasabah BELUM BAYAR yang punya no HP.</p>' +
+      bulanPickerHtml(state.bulan) +
+      '<button class="btn-primary full" onclick="doBlast()">📲 Kirim Blast WA</button>' +
+      '<div id="blastResult" class="hidden" style="margin-top:12px;"></div>' +
+    '</div>' +
+    '<div class="section-title">Histori Import</div>' +
+    '<div class="card">' + logRows + '</div>';
 }
 
 async function doImport(input) {
@@ -620,7 +544,7 @@ async function doImport(input) {
   if (!file) return;
 
   const progressEl = document.getElementById("importProgress");
-  progressEl.innerHTML = `<div class="loading"><div class="spinner"></div> Mengimport ${file.name}...</div>`;
+  progressEl.innerHTML = '<div class="loading"><div class="spinner"></div> Mengimport ' + file.name + '...</div>';
   progressEl.classList.remove("hidden");
 
   const form = new FormData();
@@ -629,50 +553,47 @@ async function doImport(input) {
   const res = await api("/api/import", "POST", form, true);
 
   if (res.error) {
-    progressEl.innerHTML = `<div class="error-msg">âŒ ${res.error}</div>`;
+    progressEl.innerHTML = '<div class="error-msg">❌ ' + res.error + '</div>';
     return;
   }
 
-  progressEl.innerHTML = `
-    <div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;line-height:1.8;">
-      âœ… <strong>Import ${bulanLabel(res.bulan)} berhasil!</strong><br>
-      ðŸ‘¤ Nasabah baru: <strong>${res.nasabah_baru}</strong><br>
-      ðŸ”„ Nasabah update: <strong>${res.nasabah_update}</strong><br>
-      âŒ Nonaktif: <strong>${res.nasabah_nonaktif}</strong><br>
-      ðŸ“‹ Tagihan baru: <strong>${res.tagihan_baru}</strong><br>
-      ðŸ”„ Tagihan update: <strong>${res.tagihan_update}</strong>
-    </div>`;
+  progressEl.innerHTML =
+    '<div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;line-height:1.8;">' +
+    '✅ <strong>Import ' + bulanLabel(res.bulan) + ' berhasil!</strong><br>' +
+    '👤 Nasabah baru: <strong>' + res.nasabah_baru + '</strong><br>' +
+    '🔄 Nasabah update: <strong>' + res.nasabah_update + '</strong><br>' +
+    '❌ Nonaktif: <strong>' + res.nasabah_nonaktif + '</strong><br>' +
+    '📋 Tagihan baru: <strong>' + res.tagihan_baru + '</strong><br>' +
+    '🔄 Tagihan update: <strong>' + res.tagihan_update + '</strong>' +
+    '</div>';
 
-  // Reset file input
   input.value = "";
-  toast("âœ… Import berhasil!");
+  toast("✅ Import berhasil!");
 }
 
 async function doBlast() {
   const resultEl = document.getElementById("blastResult");
   const btn = document.querySelector("#mainContent .btn-primary.full");
-  if (btn) { btn.textContent = "ðŸ“² Mengirim..."; btn.disabled = true; }
+  if (btn) { btn.textContent = "📲 Mengirim..."; btn.disabled = true; }
 
-  resultEl.innerHTML = `<div class="loading"><div class="spinner"></div> Mengirim WA...</div>`;
+  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> Mengirim WA...</div>';
   resultEl.classList.remove("hidden");
 
   const res = await api("/api/reminder/blast", "POST", { bulan: state.bulan });
 
-  if (btn) { btn.textContent = "ðŸ“² Kirim Blast WA"; btn.disabled = false; }
+  if (btn) { btn.textContent = "📲 Kirim Blast WA"; btn.disabled = false; }
 
   if (res.error) {
-    resultEl.innerHTML = `<div class="error-msg">âŒ ${res.error}</div>`;
+    resultEl.innerHTML = '<div class="error-msg">❌ ' + res.error + '</div>';
     return;
   }
 
-  resultEl.innerHTML = `
-    <div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;">
-      âœ… Blast selesai!<br>
-      ðŸ“² Terkirim: <strong>${res.terkirim}</strong> Â· âŒ Gagal: <strong>${res.gagal}</strong>
-    </div>`;
-  toast(`ðŸ“² ${res.terkirim} WA terkirim!`);
+  resultEl.innerHTML =
+    '<div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;">' +
+    '✅ Blast selesai!<br>📲 Terkirim: <strong>' + res.terkirim + '</strong> · ❌ Gagal: <strong>' + res.gagal + '</strong>' +
+    '</div>';
+  toast("📲 " + res.terkirim + " WA terkirim!");
 }
 
-// â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── INIT ───────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", initApp);
-
