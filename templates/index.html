@@ -391,7 +391,7 @@
     <div id="modalNasabahInfo"></div>
     <div id="modalError" class="error-msg hidden"></div>
     <div class="modal-label">Jumlah Bayar (Rp)</div>
-    <input class="modal-input" id="inputJumlah" type="number" placeholder="0"/>
+    <input class="modal-input" id="inputJumlah" type="text" placeholder="0" oninput="formatInputRibuan(this)"/>
     <div class="modal-label">Cara Bayar</div>
     <select class="modal-input" id="inputCaraBayar">
       <option value="TUNAI">Tunai</option>

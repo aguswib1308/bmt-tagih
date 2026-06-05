@@ -325,7 +325,7 @@ def list_tagihan():
         SELECT t.id, t.no_rekening, n.nama, n.no_hp, n.marketing_nama,
                t.saldo_pinjaman, t.tunggakan_pokok, t.tunggakan_margin,
                t.total_tagihan, t.kolektibilitas, t.status, t.keterangan,
-               t.cara_bayar, t.tgl_angsuran, n.tanggal_jt
+               t.cara_bayar, t.tgl_angsuran, n.tanggal_jt, n.alamat
         FROM tagihan t
         JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE {' AND '.join(where)}

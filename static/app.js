@@ -352,7 +352,9 @@ function renderTagihanCard(t) {
   return '<div class="tagihan-card ' + (isLunas ? "lunas" : "belum") + '">' +
     '<div class="tagihan-header">' +
       '<div><div class="tagihan-nama">' + t.nama + '</div>' +
-      '<div class="tagihan-rek">' + t.no_rekening + ' · ' + (t.marketing_nama || "-") + '</div></div>' +
+      '<div class="tagihan-rek">' + t.no_rekening + ' · ' + (t.marketing_nama || "-") + '</div>' +
+      (t.alamat ? '<div style="font-size:10px;color:var(--gray-500);margin-top:2px;">📍 ' + t.alamat + '</div>' : '') +
+      '</div>' +
       '<div class="tagihan-total">' + rp(t.total_tagihan) + '</div>' +
     '</div>' +
     '<div class="tagihan-meta">' +
@@ -399,7 +401,7 @@ function openModalBayar(tagihan_id, e) {
     '<div class="info-row" style="margin-top:6px;">Pokok: ' + rp(t.tunggakan_pokok) + ' · Margin: ' + rp(t.tunggakan_margin) + '</div>' +
     '<div class="info-total">' + rp(t.total_tagihan) + '</div>';
 
-  document.getElementById("inputJumlah").value = t.total_tagihan || "";
+  document.getElementById("inputJumlah").value = parseInt(t.total_tagihan || 0).toLocaleString('id-ID');
   document.getElementById("inputCaraBayar").value = "TUNAI";
   document.getElementById("inputCatatan").value = "";
   document.getElementById("inputNoHp").value = t.no_hp || "";
@@ -413,7 +415,8 @@ function closeModal() {
 }
 
 async function submitBayar() {
-  const jumlah = parseInt(document.getElementById("inputJumlah").value);
+  const jumlahStr = document.getElementById("inputJumlah").value;
+  const jumlah = parseInt(jumlahStr.replace(/[^0-9]/g, ''));
   const cara_bayar = document.getElementById("inputCaraBayar").value;
   const catatan = document.getElementById("inputCatatan").value.trim();
   const no_hp = document.getElementById("inputNoHp").value.trim();
