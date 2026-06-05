@@ -147,6 +147,76 @@ def me():
         "marketing_id": session.get("marketing_id")
     })
 
+# â”€â”€ USER MANAGEMENT (ADMIN) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+@app.route("/api/users", methods=["GET"])
+@admin_required
+def get_users():
+    conn = get_db()
+    rows = conn.execute("SELECT id, username, nama, role, marketing_id, aktif FROM users ORDER BY role, nama").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/users", methods=["POST"])
+@admin_required
+def create_user():
+    data = request.json
+    username = data.get("username", "").strip()
+    nama = data.get("nama", "").strip()
+    marketing_id = data.get("marketing_id", "").strip()
+    role = data.get("role", "marketing")
+
+    if not username or not nama:
+        return jsonify({"error": "Username dan nama wajib diisi"}), 400
+
+    conn = get_db()
+    exist = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    if exist:
+        conn.close()
+        return jsonify({"error": "Username sudah dipakai"}), 400
+
+    conn.execute(
+        "INSERT INTO users (username, password, nama, role, marketing_id, aktif) VALUES (?, ?, ?, ?, ?, 1)",
+        (username, hash_pw("bmt2026"), nama, role, marketing_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/users/<int:user_id>", methods=["PUT"])
+@admin_required
+def update_user(user_id):
+    data = request.json
+    username = data.get("username", "").strip()
+    nama = data.get("nama", "").strip()
+    marketing_id = data.get("marketing_id", "").strip()
+    aktif = int(data.get("aktif", 1))
+
+    if not username or not nama:
+        return jsonify({"error": "Username dan nama wajib diisi"}), 400
+
+    conn = get_db()
+    exist = conn.execute("SELECT id FROM users WHERE username=? AND id!=?", (username, user_id)).fetchone()
+    if exist:
+        conn.close()
+        return jsonify({"error": "Username sudah dipakai user lain"}), 400
+
+    conn.execute(
+        "UPDATE users SET username=?, nama=?, marketing_id=?, aktif=? WHERE id=?",
+        (username, nama, marketing_id, aktif, user_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/users/<int:user_id>/reset", methods=["PUT"])
+@admin_required
+def reset_user_password(user_id):
+    conn = get_db()
+    conn.execute("UPDATE users SET password=? WHERE id=?", (hash_pw("bmt2026"), user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
 # â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/dashboard")
 @login_required

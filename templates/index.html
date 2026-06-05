@@ -422,6 +422,33 @@
   </div>
 </div>
 
+<!-- ── MODAL USER ── -->
+<div id="modalUser" class="modal-overlay hidden" onclick="closeModalUser()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-title" id="modalUserTitle">👤 Tambah Marketing</div>
+    <div id="modalUserError" class="error-msg hidden"></div>
+    <div class="modal-label">Nama Lengkap</div>
+    <input class="modal-input" id="inputUserNama" type="text" placeholder="Nama Marketing"/>
+    <div class="modal-label">Username</div>
+    <input class="modal-input" id="inputUserUsername" type="text" placeholder="Username untuk login"/>
+    <div class="modal-label">Kode AO / Marketing ID</div>
+    <input class="modal-input" id="inputUserAO" type="text" placeholder="Misal: 01001"/>
+    
+    <div id="statusUserWrap" class="hidden">
+      <div class="modal-label">Status Akun</div>
+      <select class="modal-input" id="inputUserAktif">
+        <option value="1">Aktif</option>
+        <option value="0">Nonaktif</option>
+      </select>
+    </div>
+
+    <div class="modal-footer" style="margin-top:16px;">
+      <button class="btn-cancel" onclick="closeModalUser()">Batal</button>
+      <button class="btn-primary" style="flex:2" onclick="submitUser()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── TOAST ── -->
 <div id="toast" class="toast hidden"></div>
 

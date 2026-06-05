@@ -521,6 +521,13 @@ async function renderAdmin() {
     return;
   }
 
+  const topAdminHtml = 
+    '<div class="section-title">Manajemen User (Marketing)</div>' +
+    '<div class="card admin-section">' +
+      '<button class="btn-primary" onclick="openModalUser()" style="margin-bottom:12px;">➕ Tambah Marketing</button>' +
+      '<div id="adminUserList"><div class="loading"><div class="spinner"></div> Memuat...</div></div>' +
+    '</div>';
+
   const logs = await api("/api/import/log");
 
   const logRows = logs.length === 0
@@ -537,6 +544,7 @@ async function renderAdmin() {
       ).join("");
 
   main.innerHTML =
+    topAdminHtml +
     '<div class="section-title">Import Data Excel</div>' +
     '<div class="card admin-section">' +
       '<div class="import-box" onclick="document.getElementById(\'fileImport\').click()">' +
@@ -560,6 +568,8 @@ async function renderAdmin() {
 '</div>';
     '<div class="section-title">Histori Import</div>' +
 '<div class="card">' + logRows + '</div>';
+
+loadUsersAdmin();
 }
 
 async function renderTemplatePage() {
@@ -679,4 +689,116 @@ async function saveTemplate(id) {
   resultEl.innerHTML = '<div style="background:var(--green-pale);border-radius:8px;padding:10px;font-size:12px;">✅ Template berhasil disimpan!</div>';
   toast("✅ Template pesan disimpan!");
   setTimeout(() => { resultEl.innerHTML = ""; }, 3000);
+}
+
+// ── MANAJEMEN USER ─────────────────────────────────────────────
+async function loadUsersAdmin() {
+  const list = document.getElementById("adminUserList");
+  if (!list) return;
+  const users = await api("/api/users");
+  
+  if (users.error) {
+    list.innerHTML = '<div class="error-msg">❌ ' + users.error + '</div>';
+    return;
+  }
+  
+  state.adminUsers = users;
+  
+  list.innerHTML = users.map(u => {
+    const isAktif = u.aktif === 1;
+    const badge = isAktif ? '<span class="badge badge-green">Aktif</span>' : '<span class="badge badge-red">Nonaktif</span>';
+    const btnReset = '<button class="btn-sm outline" onclick="resetPasswordUser(' + u.id + ', \'' + u.username + '\')" style="padding:4px 8px;font-size:10px;">🔑 Reset PW</button>';
+    const btnEdit = '<button class="btn-sm green" onclick="openModalUser(' + u.id + ')" style="padding:4px 8px;font-size:10px;">✏️ Edit</button>';
+    
+    return '<div class="histori-item" style="padding:10px 0;">' +
+      '<div class="histori-left">' +
+        '<div class="h-nama">' + u.nama + ' ' + badge + '</div>' +
+        '<div class="h-meta">@' + u.username + ' · AO: ' + (u.marketing_id || "-") + '</div>' +
+      '</div>' +
+      '<div class="histori-right" style="display:flex;gap:6px;">' +
+        (u.role !== 'admin' ? btnReset + btnEdit : '<span class="badge badge-gray">Admin</span>') +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+
+let activeUserId = null;
+
+function openModalUser(id = null) {
+  activeUserId = id;
+  const errEl = document.getElementById("modalUserError");
+  errEl.classList.add("hidden");
+  
+  if (id) {
+    const u = state.adminUsers.find(x => x.id === id);
+    document.getElementById("modalUserTitle").textContent = "✏️ Edit Marketing";
+    document.getElementById("inputUserNama").value = u.nama;
+    document.getElementById("inputUserUsername").value = u.username;
+    document.getElementById("inputUserAO").value = u.marketing_id || "";
+    document.getElementById("inputUserAktif").value = u.aktif;
+    document.getElementById("statusUserWrap").classList.remove("hidden");
+  } else {
+    document.getElementById("modalUserTitle").textContent = "➕ Tambah Marketing";
+    document.getElementById("inputUserNama").value = "";
+    document.getElementById("inputUserUsername").value = "";
+    document.getElementById("inputUserAO").value = "";
+    document.getElementById("inputUserAktif").value = "1";
+    document.getElementById("statusUserWrap").classList.add("hidden");
+  }
+  
+  document.getElementById("modalUser").classList.remove("hidden");
+}
+
+function closeModalUser() {
+  document.getElementById("modalUser").classList.add("hidden");
+}
+
+async function submitUser() {
+  const nama = document.getElementById("inputUserNama").value.trim();
+  const username = document.getElementById("inputUserUsername").value.trim();
+  const marketing_id = document.getElementById("inputUserAO").value.trim();
+  const aktif = document.getElementById("inputUserAktif").value;
+  const errEl = document.getElementById("modalUserError");
+  
+  errEl.classList.add("hidden");
+  if (!nama || !username) {
+    errEl.textContent = "Nama dan username wajib diisi";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  
+  const btn = document.querySelector("#modalUser .btn-primary");
+  btn.textContent = "Menyimpan...";
+  btn.disabled = true;
+  
+  let res;
+  if (activeUserId) {
+    res = await api("/api/users/" + activeUserId, "PUT", { nama, username, marketing_id, aktif });
+  } else {
+    res = await api("/api/users", "POST", { nama, username, marketing_id, role: "marketing" });
+  }
+  
+  btn.textContent = "💾 Simpan";
+  btn.disabled = false;
+  
+  if (res.error) {
+    errEl.textContent = res.error;
+    errEl.classList.remove("hidden");
+    return;
+  }
+  
+  closeModalUser();
+  toast(activeUserId ? "✅ User diupdate!" : "✅ User ditambahkan (Pass: bmt2026)");
+  loadUsersAdmin();
+}
+
+async function resetPasswordUser(id, username) {
+  if (!confirm('Reset password untuk ' + username + ' menjadi "bmt2026" ?')) return;
+  
+  const res = await api("/api/users/" + id + "/reset", "PUT");
+  if (res.error) {
+    toast("❌ " + res.error, "error");
+  } else {
+    toast("✅ Password " + username + " direset ke bmt2026");
+  }
 }
