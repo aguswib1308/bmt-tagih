@@ -5,6 +5,8 @@
 
 // ── STATE ──────────────────────────────────────────────────────
 const state = {
+...
+  filterKolek: "",   // ← tambah ini
   user: null,           // { nama, role, marketing_id }
   page: "dashboard",
   bulan: "2026-05",
@@ -264,15 +266,16 @@ async function renderTagihan() {
   state.tagihan        = [];
 
   let url = `/api/tagihan?bulan=${state.bulan}&limit=50&offset=0`;
-  if (state.filterStatus) url += `&status=${state.filterStatus}`;
-  if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
+if (state.filterStatus) url += `&status=${state.filterStatus}`;
+if (state.filterKolek)  url += `&kolek=${state.filterKolek}`;   // ← tambah ini
+if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
 
   const res = await api(url);
   state.tagihan      = res.data || [];
   state.tagihanTotal = res.total || 0;
   state.tagihanOffset = state.tagihan.length;
 
-  const cards = state.tagihan.length === 0
+  const cards = rows.length === 0
     ? `<div class="empty-state"><div class="empty-icon">🔭</div><p>Tidak ada tagihan ditemukan</p></div>`
     : state.tagihan.map(renderTagihanCard).join("");
 
@@ -284,6 +287,12 @@ async function renderTagihan() {
         return `<button class="filter-chip ${state.filterStatus===s?"active":""}"
           onclick="setFilter('${s}')">${label}</button>`;
       }).join("")}
+    </div>
+    <div class="filter-bar">
+      ${[["","Semua Kolek"],["1","✅ Lancar"],["2","⚠️ DPK"],["3","🟠 KL"],["4","🔴 Diragukan"],["5","⛔ Macet"]].map(([k,label]) =>
+        `<button class="filter-chip ${state.filterKolek===k?"active":""}"
+          onclick="setFilterKolek('${k}')">${label}</button>`
+      ).join("")}
     </div>
     <input class="search-bar" type="search" placeholder="🔍 Cari nama / no rekening..."
       value="${state.searchQ}" oninput="setSearch(this.value)"/>
@@ -306,8 +315,9 @@ async function loadMoreTagihan() {
   if (btn) btn.innerHTML = `<div class="loading"><div class="spinner"></div> Memuat...</div>`;
 
   let url = `/api/tagihan?bulan=${state.bulan}&limit=50&offset=${state.tagihanOffset}`;
-  if (state.filterStatus) url += `&status=${state.filterStatus}`;
-  if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
+if (state.filterStatus) url += `&status=${state.filterStatus}`;
+if (state.filterKolek)  url += `&kolek=${state.filterKolek}`;   // ← tambah ini
+if (state.searchQ)      url += `&q=${encodeURIComponent(state.searchQ)}`;
 
   const res = await api(url);
   const newData = res.data || [];
@@ -380,7 +390,10 @@ function setSearch(q) {
   if (_searchTimer) clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => renderTagihan(), 400);
 }
-
+function setFilterKolek(k) {
+  state.filterKolek = k;
+  renderTagihan();
+}
 // ── MODAL BAYAR ────────────────────────────────────────────────
 function openModalBayar(tagihan_id, e) {
   if (e) e.stopPropagation();

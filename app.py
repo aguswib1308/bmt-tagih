@@ -212,6 +212,10 @@ def list_tagihan():
     if status:
         where.append("t.status=?")
         params.append(status)
+	kolek = request.args.get("kolek", "")
+	if kolek:
+    	where.append("t.kolektibilitas=?")
+    	params.append(int(kolek))
     if search:
         where.append("(n.nama LIKE ? OR n.no_rekening LIKE ?)")
         params += [f"%{search}%", f"%{search}%"]
@@ -224,7 +228,7 @@ def list_tagihan():
         FROM tagihan t
         JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE {' AND '.join(where)}
-        ORDER BY t.kolektibilitas DESC, t.total_tagihan DESC
+        ORDER BY n.tanggal_jt ASC, t.total_tagihan DESC, t.kolektibilitas DESC, 
     """
     # Pagination
     limit  = int(request.args.get("limit", 50))
