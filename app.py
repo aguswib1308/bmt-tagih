@@ -8,7 +8,6 @@ import io
 from PIL import Image
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
-from google.oauth2 import service_account
 
 GDRIVE_FOLDER_ID = "1ftwqyYVBIu2YZnjLip36vylMeB3dPvLV"
 GDRIVE_CREDS_PATH = os.path.join("data", "gdrive_credentials.json")
@@ -30,12 +29,33 @@ def compress_image(file_obj, max_bytes=1*1024*1024):
     buf.seek(0)
     return buf
 
+def get_gdrive_creds():
+    import json
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+    SCOPES = ["https://www.googleapis.com/auth/drive"]
+    token_path = os.path.join("data", "gdrive_token.json")
+    secret_path = os.path.join("data", "gdrive_client_secret.json")
+    with open(token_path) as f:
+        tdata = json.load(f)
+    creds = Credentials(
+        token=tdata.get("token"),
+        refresh_token=tdata.get("refresh_token"),
+        token_uri=tdata.get("token_uri", "https://oauth2.googleapis.com/token"),
+        client_id=tdata.get("client_id"),
+        client_secret=tdata.get("client_secret"),
+        scopes=tdata.get("scopes", SCOPES)
+    )
+    if not creds.valid:
+        creds.refresh(Request())
+        tdata["token"] = creds.token
+        with open(token_path, "w") as f:
+            json.dump(tdata, f)
+    return creds
+
 def upload_to_gdrive(image_buf, filename):
     try:
-        creds = service_account.Credentials.from_service_account_file(
-            GDRIVE_CREDS_PATH,
-            scopes=["https://www.googleapis.com/auth/drive"]
-        )
+        creds = get_gdrive_creds()
         svc = build("drive", "v3", credentials=creds)
         clean_name = filename.rsplit(".", 1)[0] + ".jpg"
         meta = {"name": clean_name, "parents": [GDRIVE_FOLDER_ID]}
