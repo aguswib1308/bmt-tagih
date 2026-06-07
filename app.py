@@ -8,11 +8,12 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "koperasi_bmt_secret_2026_ganti_ini")
+app.secret_key = os.environ.get(“SECRET_KEY”, “koperasi_bmt_secret_2026_ganti_ini”)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# â”€â”€ Auto-create folder data/ saat pertama jalan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-os.makedirs("data", exist_ok=True)
+# ── Auto-create folder data/ saat pertama jalan ───────────────────
+os.makedirs(“data”, exist_ok=True)
+os.makedirs(“data/foto_kunjungan”, exist_ok=True)
 
 DB_PATH = os.environ.get("DB_PATH", "data/koperasi.db")
 
@@ -480,7 +481,7 @@ def preview_blast():
     hanya_hari_ini = data.get("hanya_hari_ini", False)
 
     conn = get_db()
-    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != ''"
+    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != '' AND t.kolektibilitas IN (1,2)"
     params = [bulan]
 
     rows = conn.execute(f"""
@@ -526,7 +527,7 @@ def execute_blast():
             conn.execute("UPDATE tagihan SET total_tagihan=? WHERE id=?", (float(nom), tag_id))
     conn.commit()
 
-    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != ''"
+    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != '' AND t.kolektibilitas IN (1,2)"
     params = [bulan]
 
     rows = conn.execute(f"""
@@ -1005,6 +1006,7 @@ def kirim_reminder_h3():
         SELECT t.id, t.total_tagihan, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != ''
+        AND t.kolektibilitas IN (1,2)
     """, [bulan]).fetchall()
     conn.close()
     terkirim = gagal = skip = 0
@@ -1063,3 +1065,126 @@ def toggle_notif():
     with open(flag_path, "w") as ff:
         ff.write(aktif)
     return jsonify({"success": True, "aktif": aktif == "1"})
+
+# ── FOTO KUNJUNGAN ──────────────────────────────────────────────────
+@app.route("/foto_kunjungan/<path:filename>")
+@login_required
+def serve_foto_kunjungan(filename):
+    from flask import send_from_directory
+    return send_from_directory(os.path.join(os.getcwd(), "data/foto_kunjungan"), filename)
+
+def ensure_kunjungan_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS kunjungan (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            no_rekening TEXT,
+            bulan TEXT,
+            tanggal TEXT,
+            catatan TEXT,
+            foto_path TEXT,
+            marketing_id TEXT,
+            dicatat_oleh TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+# ── MONITORING KOLEKTIBILITAS 2-5 ──────────────────────────────────
+@app.route("/api/monitoring/nasabah", methods=["GET"])
+@login_required
+def monitoring_nasabah():
+    bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
+    conn = get_db()
+    ensure_kunjungan_table(conn)
+    rows = conn.execute("""
+        SELECT t.id as tagihan_id, t.no_rekening, t.total_tagihan, t.kolektibilitas,
+               t.tunggakan_pokok, t.tunggakan_margin, t.status,
+               n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
+        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+        WHERE t.bulan=? AND t.kolektibilitas >= 2
+        ORDER BY t.kolektibilitas DESC, n.marketing_nama, n.nama
+    """, [bulan]).fetchall()
+    kunjungan_rows = conn.execute("""
+        SELECT no_rekening, COUNT(*) as jumlah FROM kunjungan
+        WHERE bulan=? GROUP BY no_rekening
+    """, [bulan]).fetchall()
+    kunjungan_map = {r["no_rekening"]: r["jumlah"] for r in kunjungan_rows}
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["jumlah_kunjungan"] = kunjungan_map.get(r["no_rekening"], 0)
+        result.append(d)
+    return jsonify(result)
+
+@app.route("/api/kunjungan", methods=["POST"])
+@login_required
+def tambah_kunjungan():
+    import uuid
+    no_rekening = request.form.get("no_rekening", "")
+    bulan = request.form.get("bulan", datetime.now().strftime("%Y-%m"))
+    catatan = request.form.get("catatan", "").strip()
+    foto_path = None
+    if "foto" in request.files:
+        foto = request.files["foto"]
+        if foto and foto.filename:
+            ext = foto.filename.rsplit(".", 1)[-1].lower() if "." in foto.filename else "jpg"
+            if ext not in ("jpg", "jpeg", "png", "webp", "heic"):
+                return jsonify({"error": "Format foto tidak didukung"}), 400
+            filename = f"{no_rekening}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}.{ext}"
+            foto.save(os.path.join("data/foto_kunjungan", filename))
+            foto_path = filename
+    conn = get_db()
+    ensure_kunjungan_table(conn)
+    conn.execute("""
+        INSERT INTO kunjungan (no_rekening, bulan, tanggal, catatan, foto_path, marketing_id, dicatat_oleh)
+        VALUES (?,?,?,?,?,?,?)
+    """, (no_rekening, bulan, datetime.now().strftime("%Y-%m-%d"), catatan,
+          foto_path, session.get("marketing_id"), session.get("nama")))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "foto_path": foto_path})
+
+@app.route("/api/kunjungan/<no_rekening>", methods=["GET"])
+@login_required
+def get_kunjungan(no_rekening):
+    bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
+    conn = get_db()
+    ensure_kunjungan_table(conn)
+    rows = conn.execute("""
+        SELECT * FROM kunjungan WHERE no_rekening=? AND bulan=?
+        ORDER BY created_at DESC
+    """, [no_rekening, bulan]).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/monitoring/rekap", methods=["GET"])
+@login_required
+def monitoring_rekap():
+    bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
+    conn = get_db()
+    ensure_kunjungan_table(conn)
+    rows = conn.execute("""
+        SELECT t.no_rekening, n.nama, n.marketing_nama, t.kolektibilitas,
+               t.total_tagihan, t.tunggakan_pokok, t.tunggakan_margin, t.status, n.tanggal_jt
+        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+        WHERE t.bulan=? AND t.kolektibilitas >= 2
+        ORDER BY t.kolektibilitas DESC, n.marketing_nama, n.nama
+    """, [bulan]).fetchall()
+    kunjungan_rows = conn.execute("""
+        SELECT k.no_rekening, COUNT(*) as jumlah, MAX(k.tanggal) as terakhir,
+               GROUP_CONCAT(k.catatan, ' || ') as catatan_all,
+               k.dicatat_oleh
+        FROM kunjungan k WHERE k.bulan=?
+        GROUP BY k.no_rekening
+    """, [bulan]).fetchall()
+    kunjungan_map = {r["no_rekening"]: dict(r) for r in kunjungan_rows}
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        k = kunjungan_map.get(r["no_rekening"], {})
+        d["jumlah_kunjungan"] = k.get("jumlah", 0)
+        d["terakhir_kunjungan"] = k.get("terakhir") or "-"
+        d["catatan_kunjungan"] = k.get("catatan_all") or ""
+        result.append(d)
+    return jsonify(result)
