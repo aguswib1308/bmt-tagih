@@ -8,12 +8,12 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = os.environ.get(“SECRET_KEY”, “koperasi_bmt_secret_2026_ganti_ini”)
+app.secret_key = os.environ.get("SECRET_KEY", "koperasi_bmt_secret_2026_ganti_ini")
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
-# ── Auto-create folder data/ saat pertama jalan ───────────────────
-os.makedirs(“data”, exist_ok=True)
-os.makedirs(“data/foto_kunjungan”, exist_ok=True)
+# â”€â”€ Auto-create folder data/ saat pertama jalan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+os.makedirs("data", exist_ok=True)
+os.makedirs("data/foto_kunjungan", exist_ok=True)
 
 DB_PATH = os.environ.get("DB_PATH", "data/koperasi.db")
 
@@ -1066,12 +1066,14 @@ def toggle_notif():
         ff.write(aktif)
     return jsonify({"success": True, "aktif": aktif == "1"})
 
-# ── FOTO KUNJUNGAN ──────────────────────────────────────────────────
+
+# FOTO KUNJUNGAN
 @app.route("/foto_kunjungan/<path:filename>")
 @login_required
 def serve_foto_kunjungan(filename):
     from flask import send_from_directory
-    return send_from_directory(os.path.join(os.getcwd(), "data/foto_kunjungan"), filename)
+    import os as _os
+    return send_from_directory(_os.path.join(_os.getcwd(), "data/foto_kunjungan"), filename)
 
 def ensure_kunjungan_table(conn):
     conn.execute("""
@@ -1088,7 +1090,7 @@ def ensure_kunjungan_table(conn):
         )
     """)
 
-# ── MONITORING KOLEKTIBILITAS 2-5 ──────────────────────────────────
+# MONITORING KOLEKTIBILITAS 2-5
 @app.route("/api/monitoring/nasabah", methods=["GET"])
 @login_required
 def monitoring_nasabah():
@@ -1103,16 +1105,15 @@ def monitoring_nasabah():
         WHERE t.bulan=? AND t.kolektibilitas >= 2
         ORDER BY t.kolektibilitas DESC, n.marketing_nama, n.nama
     """, [bulan]).fetchall()
-    kunjungan_rows = conn.execute("""
-        SELECT no_rekening, COUNT(*) as jumlah FROM kunjungan
-        WHERE bulan=? GROUP BY no_rekening
-    """, [bulan]).fetchall()
-    kunjungan_map = {r["no_rekening"]: r["jumlah"] for r in kunjungan_rows}
+    kj = conn.execute(
+        "SELECT no_rekening, COUNT(*) as jumlah FROM kunjungan WHERE bulan=? GROUP BY no_rekening",
+        [bulan]).fetchall()
+    kj_map = {r["no_rekening"]: r["jumlah"] for r in kj}
     conn.close()
     result = []
     for r in rows:
         d = dict(r)
-        d["jumlah_kunjungan"] = kunjungan_map.get(r["no_rekening"], 0)
+        d["jumlah_kunjungan"] = kj_map.get(r["no_rekening"], 0)
         result.append(d)
     return jsonify(result)
 
@@ -1130,7 +1131,9 @@ def tambah_kunjungan():
             ext = foto.filename.rsplit(".", 1)[-1].lower() if "." in foto.filename else "jpg"
             if ext not in ("jpg", "jpeg", "png", "webp", "heic"):
                 return jsonify({"error": "Format foto tidak didukung"}), 400
-            filename = f"{no_rekening}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}.{ext}"
+            filename = "{}_{}_{}. {}".format(
+                no_rekening, datetime.now().strftime("%Y%m%d%H%M%S"), uuid.uuid4().hex[:6], ext)
+            filename = filename.replace(" ", "")
             foto.save(os.path.join("data/foto_kunjungan", filename))
             foto_path = filename
     conn = get_db()
@@ -1150,10 +1153,9 @@ def get_kunjungan(no_rekening):
     bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
     conn = get_db()
     ensure_kunjungan_table(conn)
-    rows = conn.execute("""
-        SELECT * FROM kunjungan WHERE no_rekening=? AND bulan=?
-        ORDER BY created_at DESC
-    """, [no_rekening, bulan]).fetchall()
+    rows = conn.execute(
+        "SELECT * FROM kunjungan WHERE no_rekening=? AND bulan=? ORDER BY created_at DESC",
+        [no_rekening, bulan]).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -1170,19 +1172,17 @@ def monitoring_rekap():
         WHERE t.bulan=? AND t.kolektibilitas >= 2
         ORDER BY t.kolektibilitas DESC, n.marketing_nama, n.nama
     """, [bulan]).fetchall()
-    kunjungan_rows = conn.execute("""
-        SELECT k.no_rekening, COUNT(*) as jumlah, MAX(k.tanggal) as terakhir,
-               GROUP_CONCAT(k.catatan, ' || ') as catatan_all,
-               k.dicatat_oleh
-        FROM kunjungan k WHERE k.bulan=?
-        GROUP BY k.no_rekening
+    kj = conn.execute("""
+        SELECT no_rekening, COUNT(*) as jumlah, MAX(tanggal) as terakhir,
+               GROUP_CONCAT(catatan, ' || ') as catatan_all
+        FROM kunjungan WHERE bulan=? GROUP BY no_rekening
     """, [bulan]).fetchall()
-    kunjungan_map = {r["no_rekening"]: dict(r) for r in kunjungan_rows}
+    kj_map = {r["no_rekening"]: dict(r) for r in kj}
     conn.close()
     result = []
     for r in rows:
         d = dict(r)
-        k = kunjungan_map.get(r["no_rekening"], {})
+        k = kj_map.get(r["no_rekening"], {})
         d["jumlah_kunjungan"] = k.get("jumlah", 0)
         d["terakhir_kunjungan"] = k.get("terakhir") or "-"
         d["catatan_kunjungan"] = k.get("catatan_all") or ""
