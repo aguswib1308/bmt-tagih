@@ -108,16 +108,29 @@ def get_template_isi(template_id):
     except:
         return None
 
-def pesan_tagihan(nasabah_nama, total, jatuh_tempo, marketing_nama):
+def pesan_tagihan(nasabah_nama, total, jatuh_tempo, marketing_nama, no_akad="", tunggakan=0):
+    tunggakan = tunggakan or 0
+    if tunggakan > 0:
+        template = get_template_isi("tagihan_tunggakan")
+        if template:
+            return template.format(
+                nasabah_nama=nasabah_nama,
+                total=format_rp(total),
+                jatuh_tempo=jatuh_tempo,
+                no_akad=no_akad,
+                tunggakan=format_rp(tunggakan),
+                total_keseluruhan=format_rp(total + tunggakan)
+            )
     template = get_template_isi("tagihan")
     if template:
         return template.format(
             nasabah_nama=nasabah_nama,
             total=format_rp(total),
             jatuh_tempo=jatuh_tempo,
+            no_akad=no_akad,
             marketing_nama=marketing_nama
         )
-    return f"""Assalamu'alaikum, {nasabah_nama} 🙏\n\nTagihan: {format_rp(total)}\nJatuh Tempo: {jatuh_tempo}\nMarketing: {marketing_nama}"""
+    return f"Assalamu'alaikum, {nasabah_nama}\n\nTagihan: {format_rp(total)}\nJatuh Tempo: {jatuh_tempo}"
 
 def pesan_lunas(nasabah_nama, jumlah, marketing_nama):
     template = get_template_isi("lunas")
@@ -452,7 +465,8 @@ def kirim_reminder(tagihan_id):
         return jsonify({"error": "No HP nasabah belum diisi"}), 400
 
     tgl = format_tgl_jt(row["tanggal_jt"])
-    pesan  = pesan_tagihan(row["nama"], row["total_tagihan"], tgl, row["marketing_nama"])
+    tunggakan = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
+    pesan = pesan_tagihan(row["nama"], row["total_tagihan"], tgl, row["marketing_nama"], no_akad=row["no_rekening"], tunggakan=tunggakan)
     result = kirim_wa(row["no_hp"], pesan)
     return jsonify({"success": True, "wa_result": result})
 
@@ -515,7 +529,8 @@ def execute_blast():
     params = [bulan]
 
     rows = conn.execute(f"""
-        SELECT t.id, t.total_tagihan, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
+        SELECT t.id, t.no_rekening, t.total_tagihan, t.tunggakan_pokok, t.tunggakan_margin,
+               n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         {where}
     """, params).fetchall()
@@ -530,7 +545,8 @@ def execute_blast():
         if hanya_hari_ini and tgl not in (hari_ini_str, hari_ini_str_alt):
             continue
 
-        pesan = pesan_tagihan(row["nama"], row["total_tagihan"], tgl, row["marketing_nama"])
+        tunggakan = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
+        pesan = pesan_tagihan(row["nama"], row["total_tagihan"], tgl, row["marketing_nama"], no_akad=row["no_rekening"], tunggakan=tunggakan)
         result = kirim_wa(row["no_hp"], pesan)
         if result.get("status") == True:
             terkirim += 1
@@ -620,18 +636,60 @@ def get_template():
         )
     """)
     # Default template kalau belum ada
+    tpl_tagihan = """Bismillaahirrahmaanirrahiim
+Assalamu 'alaikum warahmatullaahi wabarakaatuh
+
+Kepada
+Ykh. Bp/ibu {nasabah_nama}
+Di tempat
+Sholawat dan salam semoga tetap tercurahkan kepada nabi Muhammad saw, sahabat dan generasi penerusnya. aamiin
+Mohon maaf, mengingatkan bahwa angsuran bpk/ibu di bulan ini sudah jatuh tempo pada tanggal {jatuh_tempo} dengan No akad : {no_akad} , sebesar : {total}
+
+Pembayaran bisa dilakukan dengan :
+1.	Bayar tunai di kantor
+2.	Potong tabungan
+3.	Transfer ke bank :
+✅ BSI no rek. 7778880231 an. KSPPS BMT AMAL MUSLIM
+✅ BANK JATENG SYARIAH no rek. 6133007001 an. KSPPS BMT AMAL MUSLIM
+Demikian semoga Alloh memberikan kemudahan kepada kita semua, aamiin
+
+Wassalamu 'alaikum wr wb.
+
+Hormat kami,
+Admin
+BMT Amal Muslim
+
+) Abaikan apabila angsuran sudah terbayar"""
+
+    tpl_tagihan_tunggakan = """Bismillaahirrahmaanirrahiim
+Assalamu 'alaikum warahmatullaahi wabarakaatuh
+
+Kepada
+Ykh. Bp/ibu {nasabah_nama}
+Di tempat
+Sholawat dan salam semoga tetap tercurahkan kepada nabi Muhammad saw, sahabat dan generasi penerusnya. aamiin
+Mohon maaf, mengingatkan bahwa angsuran bpk/ibu di bulan ini sudah jatuh tempo tanggal {jatuh_tempo} dengan No akad : {no_akad} , sebesar : {total} dan tunggakan angsuran bulan sebelumnya {tunggakan} Jumlah Total {total_keseluruhan}
+
+Pembayaran bisa dilakukan dengan :
+1.	Bayar tunai di kantor
+2.	Potong tabungan
+3.	Transfer ke bank :
+✅ BSI no rek. 7778880231 an. KSPPS BMT AMAL MUSLIM
+✅ BANK JATENG SYARIAH no rek. 6133007001 an. KSPPS BMT AMAL MUSLIM
+
+Demikian semoga Alloh memberikan kemudahan kepada kita semua, aamiin
+
+Wassalamu 'alaikum wr wb.
+
+Hormat kami,
+Admin
+BMT Amal Muslim
+
+) *Abaikan apabila angsuran sudah terbayar"""
+
     defaults = [
-        ("tagihan", "Reminder Tagihan", """Assalamu'alaikum, {nasabah_nama} 🙏
-
-Kami dari *KSPPS BMT Amal Muslim Wonogiri* ingin mengingatkan tagihan Anda:
-
-💰 *Total Tagihan:* {total}
-📅 *Jatuh Tempo:* tanggal {jatuh_tempo}
-👤 *Marketing:* {marketing_nama}
-
-Mohon segera melakukan pembayaran. Terima kasih 🙏
-
-_Pesan otomatis - Jangan dibalas_"""),
+        ("tagihan", "Reminder Tagihan", tpl_tagihan),
+        ("tagihan_tunggakan", "Reminder Tagihan (Ada Tunggakan)", tpl_tagihan_tunggakan),
         ("lunas", "Konfirmasi Lunas", """Assalamu'alaikum, {nasabah_nama} 🙏
 
 ✅ Pembayaran Anda telah *berhasil dicatat*!
@@ -645,6 +703,10 @@ Terima kasih atas kepercayaan Anda 🙏
     ]
     for id, judul, isi in defaults:
         conn.execute("INSERT OR IGNORE INTO template_pesan VALUES (?,?,?)", (id, judul, isi))
+    # Update tagihan templates in case they were already saved with old format
+    conn.execute("UPDATE template_pesan SET isi=? WHERE id='tagihan'", (tpl_tagihan,))
+    conn.execute("UPDATE template_pesan SET judul=?, isi=? WHERE id='tagihan_tunggakan'",
+                 ("Reminder Tagihan (Ada Tunggakan)", tpl_tagihan_tunggakan))
     conn.commit()
     rows = conn.execute("SELECT * FROM template_pesan").fetchall()
     conn.close()
