@@ -187,6 +187,16 @@ async function toggleNotif(aktif) {
   }
 }
 
+// ── HELPER FOTO URL ────────────────────────────────────────────────
+function getFotoUrl(foto_path) {
+  if (!foto_path) return null;
+  if (foto_path.startsWith('gdrive:')) {
+    const fileId = foto_path.replace('gdrive:', '');
+    return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w800';
+  }
+  return '/foto_kunjungan/' + foto_path;
+}
+
 // ── MONITORING KOLEKTIBILITAS 2-5 ─────────────────────────────────
 const KOL_LABEL = ["","Lancar","DPK","Kurang Lancar","Diragukan","Macet"];
 const KOL_COLOR = ["","#27ae60","#e67e22","#e74c3c","#c0392b","#7b241c"];
@@ -402,7 +412,7 @@ async function loadRiwayatKunjungan(no_rek, bulan) {
     + rows.map(r =>
       '<div style="background:var(--gray-50);border-radius:8px;padding:10px;margin-bottom:6px;">'
       + '<div style="font-size:11px;color:var(--gray-500);margin-bottom:4px;">'+r.tanggal+' · '+( r.dicatat_oleh||"-")+'</div>'
-      + (r.foto_path ? '<img src="/foto_kunjungan/'+r.foto_path+'" style="width:100%;max-height:150px;object-fit:cover;border-radius:6px;margin-bottom:6px;display:block;">' : '')
+      + (r.foto_path ? '<img src="'+getFotoUrl(r.foto_path)+'" style="width:100%;max-height:150px;object-fit:cover;border-radius:6px;margin-bottom:6px;display:block;" loading="lazy">' : '')
       + '<div style="font-size:12px;">'+r.catatan+'</div>'
       + '</div>'
     ).join("");

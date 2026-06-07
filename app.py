@@ -4,6 +4,52 @@ import hashlib
 import requests
 import os
 import re
+import io
+from PIL import Image
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from google.oauth2 import service_account
+
+GDRIVE_FOLDER_ID = "1ftwqyYVBIu2YZnjLip36vylMeB3dPvLV"
+GDRIVE_CREDS_PATH = os.path.join("data", "gdrive_credentials.json")
+
+def compress_image(file_obj, max_bytes=1*1024*1024):
+    img = Image.open(file_obj)
+    if img.mode in ("RGBA", "P", "CMYK"):
+        img = img.convert("RGB")
+    max_dim = 1920
+    if max(img.size) > max_dim:
+        ratio = max_dim / max(img.size)
+        img = img.resize((int(img.width*ratio), int(img.height*ratio)), Image.LANCZOS)
+    for quality in [85, 70, 55, 40, 25]:
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        if buf.tell() <= max_bytes:
+            buf.seek(0)
+            return buf
+    buf.seek(0)
+    return buf
+
+def upload_to_gdrive(image_buf, filename):
+    try:
+        creds = service_account.Credentials.from_service_account_file(
+            GDRIVE_CREDS_PATH,
+            scopes=["https://www.googleapis.com/auth/drive"]
+        )
+        svc = build("drive", "v3", credentials=creds)
+        clean_name = filename.rsplit(".", 1)[0] + ".jpg"
+        meta = {"name": clean_name, "parents": [GDRIVE_FOLDER_ID]}
+        media = MediaIoBaseUpload(image_buf, mimetype="image/jpeg", resumable=False)
+        f = svc.files().create(body=meta, media_body=media, fields="id").execute()
+        file_id = f.get("id")
+        svc.permissions().create(
+            fileId=file_id, body={"type": "anyone", "role": "reader"}
+        ).execute()
+        return file_id
+    except Exception as e:
+        print("Drive upload error:", e)
+        return None
+
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -1128,13 +1174,18 @@ def tambah_kunjungan():
         foto = request.files["foto"]
         if foto and foto.filename:
             ext = foto.filename.rsplit(".", 1)[-1].lower() if "." in foto.filename else "jpg"
-            if ext not in ("jpg", "jpeg", "png", "webp", "heic"):
+            if ext not in ("jpg", "jpeg", "png", "webp", "heic", "gif", "bmp"):
                 return jsonify({"error": "Format foto tidak didukung"}), 400
-            filename = "{}_{}_{}. {}".format(
-                no_rekening, datetime.now().strftime("%Y%m%d%H%M%S"), uuid.uuid4().hex[:6], ext)
-            filename = filename.replace(" ", "")
-            foto.save(os.path.join("data/foto_kunjungan", filename))
-            foto_path = filename
+            filename = "{}_{}_{}.jpg".format(
+                no_rekening, datetime.now().strftime("%Y%m%d%H%M%S"), uuid.uuid4().hex[:6])
+            compressed = compress_image(foto.stream)
+            file_id = upload_to_gdrive(compressed, filename)
+            if file_id:
+                foto_path = "gdrive:" + file_id
+            else:
+                foto.stream.seek(0)
+                foto.save(os.path.join("data/foto_kunjungan", filename))
+                foto_path = filename
     conn = get_db()
     ensure_kunjungan_table(conn)
     conn.execute("""
