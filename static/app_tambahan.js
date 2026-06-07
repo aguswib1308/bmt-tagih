@@ -305,26 +305,35 @@ async function loadMonitorRekap(bulan) {
   const html = filtered.map(r => {
     const kol = r.kolektibilitas;
     const tunggakan = (r.tunggakan_pokok||0)+(r.tunggakan_margin||0);
-    const statusBadge = r.status==="LUNAS"?'<span class="badge badge-green">LUNAS</span>':'<span class="badge badge-red">BELUM</span>';
-    return '<tr style="border-bottom:1px solid var(--gray-100);">'
-      + '<td style="padding:8px 6px;font-size:12px;font-weight:700;">'+r.nama+'<div style="font-size:10px;color:var(--gray-500);">'+r.no_rekening+'</div></td>'
-      + '<td style="padding:8px 6px;font-size:11px;">'+( r.marketing_nama||"-")+'</td>'
-      + '<td style="padding:8px 6px;text-align:center;"><span style="background:'+KOL_BG[kol]+';color:'+KOL_COLOR[kol]+';font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;">'+KOL_LABEL[kol]+'</span></td>'
-      + '<td style="padding:8px 6px;font-size:11px;font-weight:700;color:var(--red-dark);text-align:right;">'+rpShort(r.total_tagihan)+'</td>'
-      + '<td style="padding:8px 6px;font-size:11px;text-align:right;">'+(tunggakan>0?rpShort(tunggakan):'-')+'</td>'
-      + '<td style="padding:8px 6px;text-align:center;">'+statusBadge+'</td>'
-      + '<td style="padding:8px 6px;text-align:center;font-size:11px;">'+(r.jumlah_kunjungan>0?'<span style="color:var(--green-dark);font-weight:700;">✅ '+r.jumlah_kunjungan+'x</span><div style="font-size:10px;color:var(--gray-400);">'+r.terakhir_kunjungan+'</div>':'<span style="color:var(--gray-400);">-</span>')+'</td>'
-      + '<td style="padding:8px 6px;font-size:10px;color:var(--gray-600);max-width:120px;word-break:break-word;">'+( r.catatan_kunjungan||"")+'</td>'
-      + '</tr>';
+    const statusBadge = r.status==="LUNAS"
+      ? '<span style="background:#eafaf1;color:#27ae60;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;">LUNAS</span>'
+      : '<span style="background:#fdedec;color:#e74c3c;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;">BELUM</span>';
+    const kunjInfo = r.jumlah_kunjungan > 0
+      ? '<span style="color:var(--green-dark);font-weight:700;font-size:11px;">✅ '+r.jumlah_kunjungan+'x · '+r.terakhir_kunjungan+'</span>'
+        + (r.catatan_kunjungan ? '<div style="font-size:11px;color:var(--gray-600);margin-top:2px;font-style:italic;">'+r.catatan_kunjungan+'</div>' : '')
+      : '<span style="color:var(--gray-400);font-size:11px;">Belum dikunjungi</span>';
+    return '<div class="card" style="margin-bottom:8px;padding:12px 14px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
+      + '<div style="flex:1;min-width:0;">'
+      + '<div style="font-size:13px;font-weight:800;">'+r.nama+'</div>'
+      + '<div style="font-size:11px;color:var(--gray-500);">'+r.no_rekening+' · '+(r.marketing_nama||"-")+'</div>'
+      + '</div>'
+      + '<span style="background:'+KOL_BG[kol]+';color:'+KOL_COLOR[kol]+';font-size:10px;font-weight:800;padding:3px 8px;border-radius:99px;margin-left:8px;white-space:nowrap;">'+KOL_LABEL[kol]+'</span>'
+      + '</div>'
+      + '<div style="display:flex;gap:12px;align-items:center;margin-bottom:6px;">'
+      + '<div><div style="font-size:11px;color:var(--gray-500);">Tagihan</div><div style="font-size:12px;font-weight:800;color:var(--red-dark);">'+rpShort(r.total_tagihan)+'</div></div>'
+      + (tunggakan>0?'<div><div style="font-size:11px;color:var(--gray-500);">Tunggakan</div><div style="font-size:12px;font-weight:700;color:var(--yellow-dark);">'+rpShort(tunggakan)+'</div></div>':'')
+      + '<div>'+statusBadge+'</div>'
+      + '</div>'
+      + '<div style="border-top:1px solid var(--gray-100);padding-top:6px;">'+kunjInfo+'</div>'
+      + '</div>';
   }).join("");
   box.innerHTML = '<div class="card" style="padding:12px 14px;margin-bottom:10px;display:flex;gap:16px;">'
-    + '<div style="text-align:center;flex:1;"><div style="font-size:16px;font-weight:800;color:var(--red-dark);">'+filtered.length+'</div><div style="font-size:11px;color:var(--gray-500);">Nasabah</div></div>'
-    + '<div style="text-align:center;flex:1;"><div style="font-size:16px;font-weight:800;color:var(--green-dark);">'+sudahKunjung+'</div><div style="font-size:11px;color:var(--gray-500);">Dikunjungi</div></div>'
-    + '<div style="text-align:center;flex:1;"><div style="font-size:16px;font-weight:800;color:var(--yellow-dark);">'+rpShort(totalTagihan)+'</div><div style="font-size:11px;color:var(--gray-500);">Total Tagihan</div></div>'
+    + '<div style="text-align:center;flex:1;"><div style="font-size:18px;font-weight:800;color:var(--red-dark);">'+filtered.length+'</div><div style="font-size:11px;color:var(--gray-500);">Nasabah</div></div>'
+    + '<div style="text-align:center;flex:1;"><div style="font-size:18px;font-weight:800;color:var(--green-dark);">'+sudahKunjung+'</div><div style="font-size:11px;color:var(--gray-500);">Dikunjungi</div></div>'
+    + '<div style="text-align:center;flex:1;"><div style="font-size:18px;font-weight:800;color:var(--yellow-dark);">'+rpShort(totalTagihan)+'</div><div style="font-size:11px;color:var(--gray-500);">Total Tagihan</div></div>'
     + '</div>'
-    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'
-    + '<thead><tr style="background:var(--gray-50);"><th style="padding:8px 6px;text-align:left;font-size:11px;">Nasabah</th><th style="padding:8px 6px;text-align:left;font-size:11px;">Marketing</th><th style="padding:8px 6px;font-size:11px;">Kol</th><th style="padding:8px 6px;font-size:11px;text-align:right;">Tagihan</th><th style="padding:8px 6px;font-size:11px;text-align:right;">Tunggakan</th><th style="padding:8px 6px;font-size:11px;">Status</th><th style="padding:8px 6px;font-size:11px;">Kunjungan</th><th style="padding:8px 6px;font-size:11px;">Catatan</th></tr></thead>'
-    + '<tbody>' + html + '</tbody></table></div>';
+    + html;
 }
 
 function bukaFormKunjungan(no_rek, nama, bulan) {
