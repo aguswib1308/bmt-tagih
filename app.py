@@ -1069,7 +1069,6 @@ def toggle_notif():
 
 # FOTO KUNJUNGAN
 @app.route("/foto_kunjungan/<path:filename>")
-@login_required
 def serve_foto_kunjungan(filename):
     from flask import send_from_directory
     import os as _os
