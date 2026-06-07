@@ -978,3 +978,25 @@ def kirim_rekap_mingguan():
     conn.close()
     terkirim = len(rows)
     return jsonify({"success": True, "terkirim": terkirim, "gagal": 0, "total_marketing": len(rows)})
+
+# ── TOGGLE NOTIF ───────────────────────────────────────────────
+@app.route("/api/notif/status", methods=["GET"])
+@admin_required
+def get_notif_status():
+    flag_path = os.path.join("data", "notif_flag.txt")
+    try:
+        with open(flag_path, "r") as ff:
+            flag = ff.read().strip()
+    except:
+        flag = os.environ.get("NOTIF_AKTIF", "0")
+    return jsonify({"aktif": flag == "1"})
+
+@app.route("/api/notif/toggle", methods=["POST"])
+@admin_required
+def toggle_notif():
+    data = request.json
+    aktif = "1" if data.get("aktif") else "0"
+    flag_path = os.path.join("data", "notif_flag.txt")
+    with open(flag_path, "w") as ff:
+        ff.write(aktif)
+    return jsonify({"success": True, "aktif": aktif == "1"})

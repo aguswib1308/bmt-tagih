@@ -34,3 +34,9 @@ Thumbs.db
 
 # Env file (jangan expose token!)
 .env
+*.backup
+__pycache__/
+*.pyc
+.env
+data/koperasi.db
+data/notif_flag.txt
