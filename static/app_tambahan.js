@@ -153,3 +153,27 @@ document.addEventListener("DOMContentLoaded", function() {
     };
   }
 });
+// ── TOGGLE NOTIF UI ─────────────────────────────────────────────
+async function loadToggleNotif() {
+  const res = await api("/api/notif/status");
+  const aktif = res.aktif;
+  const el = document.getElementById("toggleNotifBox");
+  if (!el) return;
+  el.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px;">' +
+    '<div>' +
+    '<div style="font-size:14px;font-weight:800;">📲 Notifikasi WA ke Anggota</div>' +
+    '<div style="font-size:12px;color:var(--gray-400);margin-top:2px;">' + (aktif ? '✅ Aktif — WA akan terkirim ke anggota' : '⏸️ Nonaktif — semua WA diblokir') + '</div>' +
+    '</div>' +
+    '<button onclick="toggleNotif(' + !aktif + ')" class="btn-sm ' + (aktif ? 'outline" style="color:var(--red-dark);border-color:var(--red-dark);"' : 'green"') + '>' +
+    (aktif ? '🔴 Matikan' : '✅ Aktifkan') +
+    '</button></div>';
+}
+
+async function toggleNotif(aktif) {
+  const res = await api("/api/notif/toggle", "POST", { aktif });
+  if (res.success) {
+    toast(aktif ? "✅ Notifikasi WA diaktifkan!" : "⏸️ Notifikasi WA dimatikan!");
+    loadToggleNotif();
+  }
+}
