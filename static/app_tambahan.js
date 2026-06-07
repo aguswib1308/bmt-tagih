@@ -188,6 +188,8 @@ async function toggleNotif(aktif) {
 }
 
 // ── HELPER FOTO URL ────────────────────────────────────────────────
+let _selectedFotoFile = null;
+
 function getFotoUrl(foto_path) {
   if (!foto_path) return null;
   if (foto_path.startsWith('gdrive:')) {
@@ -356,11 +358,12 @@ function bukaFormKunjungan(no_rek, nama, bulan) {
 function previewFoto(input) {
   const box = document.getElementById("fotoPreviewBox");
   if (input.files && input.files[0]) {
+    _selectedFotoFile = input.files[0];
     const reader = new FileReader();
     reader.onload = e => {
       box.innerHTML = '<div style="position:relative;display:inline-block;width:100%;">'
         + '<img src="'+e.target.result+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;display:block;">'
-        + '<button onclick="hapusFotoPreview()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:14px;">✕</button>'
+        + '<button type="button" onclick="hapusFotoPreview()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:14px;">✕</button>'
         + '</div>';
     };
     reader.readAsDataURL(input.files[0]);
@@ -368,6 +371,7 @@ function previewFoto(input) {
 }
 
 function hapusFotoPreview() {
+  _selectedFotoFile = null;
   document.getElementById("fotoPreviewBox").innerHTML =
     '<label style="display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:20px;cursor:pointer;gap:8px;">'
     + '<span style="font-size:28px;">📷</span><span style="font-size:12px;color:var(--gray-500);">Tap untuk ambil/pilih foto</span>'
@@ -386,11 +390,12 @@ async function submitKunjungan(e, no_rek, bulan) {
   fd.append("no_rekening", no_rek);
   fd.append("bulan", bulan);
   fd.append("catatan", catatan);
-  if (fotoInput && fotoInput.files[0]) fd.append("foto", fotoInput.files[0]);
+  if (_selectedFotoFile) fd.append("foto", _selectedFotoFile);
   try {
     const res = await fetch("/api/kunjungan", { method:"POST", body: fd });
     const data = await res.json();
     if (data.success) {
+      _selectedFotoFile = null;
       toast("✅ Kunjungan berhasil dicatat!");
       document.getElementById("modalKunjungan").remove();
       renderMonitoringKol();
