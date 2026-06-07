@@ -862,7 +862,7 @@ def get_jadwal():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS jadwal_notif (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tipe TEXT NOT NULL, jam TEXT NOT NULL, aktif INTEGER DEFAULT 1,
+            tipe TEXT NOT NULL UNIQUE, jam TEXT NOT NULL, aktif INTEGER DEFAULT 1,
             keterangan TEXT, dibuat_oleh TEXT,
             dibuat_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
