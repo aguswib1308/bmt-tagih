@@ -1311,9 +1311,14 @@ async function loadMonitorRekap(bulan) {
     const statusBadge = r.status==="LUNAS"
       ? '<span style="background:#eafaf1;color:#27ae60;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;">LUNAS</span>'
       : '<span style="background:#fdedec;color:#e74c3c;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;">BELUM</span>';
+    const bulan = state.bulan;
     const kunjInfo = r.jumlah_kunjungan > 0
-      ? '<span style="color:var(--green-dark);font-weight:700;font-size:11px;">✅ '+r.jumlah_kunjungan+'x · '+r.terakhir_kunjungan+'</span>'
+      ? '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
+        + '<div><span style="color:var(--green-dark);font-weight:700;font-size:11px;">✅ '+r.jumlah_kunjungan+'x · '+r.terakhir_kunjungan+'</span>'
         + (r.catatan_kunjungan ? '<div style="font-size:11px;color:var(--gray-600);margin-top:2px;font-style:italic;">'+r.catatan_kunjungan+'</div>' : '')
+        + '</div>'
+        + '<button onclick="lihatFotoKunjungan(\''+r.no_rekening+'\',\''+r.nama.replace(/'/g,"\\'")+'\',\''+bulan+'\')" class="btn-sm outline" style="font-size:11px;padding:4px 10px;white-space:nowrap;">🖼️ Foto</button>'
+        + '</div>'
       : '<span style="color:var(--gray-400);font-size:11px;">Belum dikunjungi</span>';
     return '<div class="card" style="margin-bottom:8px;padding:12px 14px;">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
@@ -1418,6 +1423,43 @@ async function submitKunjungan(e, no_rek, bulan) {
   } catch(err) {
     toast("❌ Koneksi gagal"); btn.disabled = false; btn.textContent = "💾 Simpan Kunjungan";
   }
+}
+
+async function lihatFotoKunjungan(no_rek, nama, bulan) {
+  const existing = document.getElementById("modalLihatFoto");
+  if (existing) existing.remove();
+  const modal = document.createElement("div");
+  modal.id = "modalLihatFoto";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-end;";
+  modal.innerHTML = '<div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding:20px;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+    + '<div><div style="font-size:15px;font-weight:800;">Foto Kunjungan</div><div style="font-size:12px;color:var(--gray-500);">'+nama+' · '+bulan+'</div></div>'
+    + '<button onclick="document.getElementById(\'modalLihatFoto\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-400);">✕</button>'
+    + '</div>'
+    + '<div id="fotoKunjunganList"><div class="loading"><div class="spinner"></div> Memuat...</div></div>'
+    + '</div>';
+  document.body.appendChild(modal);
+  modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+
+  const rows = await api("/api/kunjungan/" + no_rek + "?bulan=" + bulan);
+  const box = document.getElementById("fotoKunjunganList");
+  if (!box) return;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    box.innerHTML = '<div class="empty-state"><p>Tidak ada data kunjungan</p></div>';
+    return;
+  }
+  box.innerHTML = rows.map(r => {
+    const fotoUrl = r.foto_path ? getFotoUrl(r.foto_path) : null;
+    return '<div style="margin-bottom:16px;border-bottom:1px solid var(--gray-100);padding-bottom:16px;">'
+      + '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-500);margin-bottom:8px;">'
+      + '<span>📅 '+r.tanggal+'</span><span>👤 '+(r.dicatat_oleh||"-")+'</span>'
+      + '</div>'
+      + (fotoUrl
+        ? '<a href="'+fotoUrl+'" target="_blank"><img src="'+fotoUrl+'" style="width:100%;max-height:260px;object-fit:cover;border-radius:10px;display:block;margin-bottom:8px;" loading="lazy" onerror="this.style.display=\'none\'"></a>'
+        : '<div style="background:var(--gray-100);border-radius:10px;padding:20px;text-align:center;color:var(--gray-400);font-size:12px;margin-bottom:8px;">Tidak ada foto</div>')
+      + (r.catatan ? '<div style="font-size:13px;color:var(--gray-700);">'+r.catatan+'</div>' : '')
+      + '</div>';
+  }).join("");
 }
 
 async function loadRiwayatKunjungan(no_rek, bulan) {
