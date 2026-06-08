@@ -2084,6 +2084,7 @@ async function renderRekapHarianIsi(tgl){
           +'<div style="display:flex;justify-content:space-between;align-items:center;">'
           +'<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.nama+'</div>'
           +(kol?'<span style="background:'+KOL_BG[kol]+';color:'+KOL_COLOR[kol]+';font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;margin-left:4px;white-space:nowrap;">'+KOL_LABEL[kol]+'</span>':'')
+          +'</div>'
           +'<div style="font-size:11px;color:var(--gray-500);margin-top:2px;">'+(r.dicatat_oleh||'-')+' · '+(r.total_tagihan?rpShort(r.total_tagihan):'-')+(tung?' · tung '+rpShort(tung):'')+(r.status==='LUNAS'?' · <span style="background:#eafaf1;color:#27ae60;font-weight:800;padding:1px 7px;border-radius:99px;">✅ LUNAS</span>':' · <span style="background:#fdedec;color:#e74c3c;font-weight:700;padding:1px 7px;border-radius:99px;">BELUM</span>')+'</div>'
           +(r.catatan?'<div style="font-size:11px;color:var(--gray-600);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.catatan)+'</div>':'')
           +'</div></div>';
