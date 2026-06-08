@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, render_template, redirect, url_for
+from flask import Flask, request, jsonify, session, render_template, redirect, url_for, send_from_directory, make_response
 import sqlite3
 import hashlib
 import requests
@@ -74,14 +74,28 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "koperasi_bmt_secret_2026_ganti_ini")
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
+_sk = os.environ.get("SECRET_KEY")
+if not _sk:
+    _sk_file = os.path.join("data", ".secret_key")
+    if os.path.exists(_sk_file):
+        with open(_sk_file) as _f: _sk = _f.read().strip()
+    else:
+        import secrets as _sec
+        _sk = _sec.token_hex(32)
+        os.makedirs("data", exist_ok=True)
+        with open(_sk_file, "w") as _f: _f.write(_sk)
+        print("[SECURITY] Secret key baru digenerate:", _sk_file)
+app.secret_key = _sk
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB
 
 # â”€â”€ Auto-create folder data/ saat pertama jalan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/foto_kunjungan", exist_ok=True)
 
 DB_PATH = os.environ.get("DB_PATH", "data/koperasi.db")
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
 
 # â”€â”€ Fonnte Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FONNTE_TOKEN = os.environ.get("FONNTE_TOKEN", "")
@@ -123,13 +137,7 @@ def login_required(f):
     return decorated
 
 def get_user_role():
-    r = session.get("role")
-    if r == "admin": return r
-    uname = session.get("username", "").lower()
-    nama = session.get("nama", "").lower()
-    if uname in ["suratman", "agus s", "aguss"] or "suratman" in nama or "agus s" in nama:
-        return "admin"
-    return r
+    return session.get("role", "marketing")
 
 def admin_required(f):
     @wraps(f)
@@ -233,6 +241,7 @@ def login():
     if not user:
         return jsonify({"error": "Username atau password salah"}), 401
 
+    session.permanent = True
     session["user_id"]     = user["id"]
     session["username"]    = user["username"]
     session["nama"]        = user["nama"]
@@ -343,31 +352,31 @@ def dashboard():
 
     where = "WHERE t.bulan=?"
     params = [bulan]
-    if role != "admin" and marketing_id:
+    if role not in ("admin","leader","petugas") and marketing_id:
         where += " AND n.marketing_id=?"
         params.append(marketing_id)
 
     stats = conn.execute(f"""
         SELECT
             COUNT(*) as total_nasabah,
-            SUM(t.total_tagihan)  as total_tagihan,
-            SUM(CASE WHEN t.status='LUNAS' THEN t.total_tagihan ELSE 0 END) as total_terkumpul,
-            SUM(CASE WHEN t.status='BELUM' THEN t.total_tagihan ELSE 0 END) as total_tunggakan,
-            SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as sudah_bayar,
-            SUM(CASE WHEN t.status='BELUM' THEN 1 ELSE 0 END) as belum_bayar
+            SUM(t.angsuran_per_bulan) as total_tagihan,
+            SUM(CASE WHEN t.status='LUNAS' OR t.total_tagihan < 1 THEN t.angsuran_per_bulan ELSE 0 END) as total_terkumpul,
+            SUM(CASE WHEN t.status='BELUM' AND t.total_tagihan >= 1 THEN t.total_tagihan ELSE 0 END) as total_tunggakan,
+            SUM(CASE WHEN t.status='LUNAS' OR t.total_tagihan < 1 THEN 1 ELSE 0 END) as sudah_bayar,
+            SUM(CASE WHEN t.status='BELUM' AND t.total_tagihan >= 1 THEN 1 ELSE 0 END) as belum_bayar
         FROM tagihan t
         JOIN nasabah n ON t.no_rekening = n.no_rekening
         {where}
     """, params).fetchone()
 
     rekap_marketing = []
-    if role == "admin":
+    if role in ("admin","leader"):
         rows = conn.execute(f"""
             SELECT n.marketing_nama,
                 COUNT(*) as total,
-                SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as lunas,
-                SUM(CASE WHEN t.status='BELUM' THEN 1 ELSE 0 END) as belum,
-                SUM(CASE WHEN t.status='LUNAS' THEN t.total_tagihan ELSE 0 END) as nominal_lunas
+                SUM(CASE WHEN t.status='LUNAS' OR t.total_tagihan < 1 THEN 1 ELSE 0 END) as lunas,
+                SUM(CASE WHEN t.status='BELUM' AND t.total_tagihan >= 1 THEN 1 ELSE 0 END) as belum,
+                SUM(CASE WHEN t.status='LUNAS' OR t.total_tagihan < 1 THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas
             FROM tagihan t
             JOIN nasabah n ON t.no_rekening = n.no_rekening
             WHERE t.bulan=?
@@ -397,10 +406,15 @@ def list_tagihan():
     where  = ["t.bulan=?"]
     params = [bulan]
 
-    if role != "admin" and marketing_id:
+    if role not in ("admin","leader","petugas") and marketing_id:
         where.append("n.marketing_id=?")
         params.append(marketing_id)
-    if status:
+    if status == "LUNAS":
+        where.append("(t.status='LUNAS' OR t.total_tagihan < 1)")
+    elif status == "BELUM":
+        where.append("t.status='BELUM'")
+        where.append("t.total_tagihan >= 1")
+    elif status:
         where.append("t.status=?")
         params.append(status)
     kolek = request.args.get("kolek", "")
@@ -422,7 +436,7 @@ def list_tagihan():
         ORDER BY t.kolektibilitas DESC, n.tanggal_jt ASC, t.total_tagihan DESC
     """
     # Pagination
-    limit  = int(request.args.get("limit", 50))
+    limit  = min(int(request.args.get("limit", 50)), 500)
     offset = int(request.args.get("offset", 0))
 
     sql_count = f"SELECT COUNT(*) FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening WHERE {' AND '.join(where)}"
@@ -441,6 +455,36 @@ def list_tagihan():
     })
 
 # â”€â”€ CATAT PEMBAYARAN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/tagihan/jatuh-tempo")
+@login_required
+def tagihan_jatuh_tempo():
+    from datetime import datetime
+    bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
+    today_day = int(datetime.now().strftime("%d"))
+    conn = get_db()
+    marketing_id = session.get("marketing_id")
+    role = get_user_role()
+    params = [bulan, today_day]
+    extra = ""
+    if role not in ("admin", "leader", "petugas") and marketing_id:
+        extra = " AND n.marketing_id=?"
+        params.append(marketing_id)
+    rows = conn.execute(f"""
+        SELECT t.id, t.no_rekening, t.total_tagihan, t.status, t.kolektibilitas,
+               t.tunggakan_pokok, t.tunggakan_margin, t.cara_bayar,
+               n.nama, n.no_hp, n.tanggal_jt, n.marketing_nama, n.alamat
+        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+        WHERE t.bulan=? AND t.status='BELUM'
+          AND t.total_tagihan >= 1
+          AND CAST(SUBSTR(n.tanggal_jt, 7, 2) AS INTEGER) <= ?
+          {extra}
+        ORDER BY CAST(SUBSTR(n.tanggal_jt, 7, 2) AS INTEGER), n.nama
+    """, params).fetchall()
+    conn.close()
+    return jsonify({"data": [dict(r) for r in rows], "total": len(rows),
+                    "today_day": today_day, "bulan": bulan})
+
 @app.route("/api/bayar", methods=["POST"])
 @login_required
 def bayar():
@@ -533,8 +577,15 @@ def kirim_reminder(tagihan_id):
         return jsonify({"error": "No HP nasabah belum diisi"}), 400
 
     tgl = format_tgl_jt(row["tanggal_jt"])
-    tunggakan = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
-    pesan = pesan_tagihan(row["nama"], row["total_tagihan"], tgl, row["marketing_nama"], no_akad=row["no_rekening"], tunggakan=tunggakan)
+    angs_pb = row["angsuran_per_bulan"] or 0
+    total_th = row["total_tagihan"] or 0
+    if angs_pb > 0:
+        actual_tung = max(0, round(total_th - angs_pb))
+        nominal_pesan = angs_pb if actual_tung > 0 else total_th
+    else:
+        actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
+        nominal_pesan = total_th
+    pesan = pesan_tagihan(row["nama"], nominal_pesan, tgl, row["marketing_nama"], no_akad=row["no_rekening"], tunggakan=actual_tung)
     result = kirim_wa(row["no_hp"], pesan)
     return jsonify({"success": True, "wa_result": result})
 
@@ -598,6 +649,7 @@ def execute_blast():
 
     rows = conn.execute(f"""
         SELECT t.id, t.no_rekening, t.total_tagihan, t.tunggakan_pokok, t.tunggakan_margin,
+               t.angsuran_per_bulan,
                n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         {where}
@@ -613,8 +665,15 @@ def execute_blast():
         if hanya_hari_ini and tgl not in (hari_ini_str, hari_ini_str_alt):
             continue
 
-        tunggakan = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
-        pesan = pesan_tagihan(row["nama"], row["total_tagihan"], tgl, row["marketing_nama"], no_akad=row["no_rekening"], tunggakan=tunggakan)
+        angs_pb = row["angsuran_per_bulan"] or 0
+        total_th = row["total_tagihan"] or 0
+        if angs_pb > 0:
+            actual_tung = max(0, round(total_th - angs_pb))
+            nominal_pesan = angs_pb if actual_tung > 0 else total_th
+        else:
+            actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
+            nominal_pesan = total_th
+        pesan = pesan_tagihan(row["nama"], nominal_pesan, tgl, row["marketing_nama"], no_akad=row["no_rekening"], tunggakan=actual_tunggakan)
         result = kirim_wa(row["no_hp"], pesan)
         if result.get("status") == True:
             terkirim += 1
@@ -644,19 +703,35 @@ def histori():
     marketing_id = session.get("marketing_id")
     role         = get_user_role()
 
-    where  = ""
-    params = []
-    if role != "admin" and marketing_id:
-        where = "WHERE p.marketing_id=?"
+    mkt_cond = ""
+    params   = []
+    if role not in ("admin","leader","petugas") and marketing_id:
+        mkt_cond = "AND n.marketing_id=?"
         params.append(marketing_id)
 
+    # Gabung pembayaran manual + tagihan LUNAS dari import
     rows = conn.execute(f"""
-        SELECT p.*, n.nama
+        SELECT n.nama, p.no_rekening, p.cara_bayar,
+               p.dicatat_oleh, p.tanggal, p.jumlah, p.catatan
         FROM pembayaran p JOIN nasabah n ON p.no_rekening = n.no_rekening
-        {where}
-        ORDER BY p.tanggal DESC
-        LIMIT 100
-    """, params).fetchall()
+        WHERE 1=1 {mkt_cond}
+        UNION ALL
+        SELECT n.nama, t.no_rekening,
+               COALESCE(t.cara_bayar,'TUNAI') as cara_bayar,
+               'Import' as dicatat_oleh,
+               CASE WHEN length(CAST(t.tgl_bayar AS TEXT))=8
+                    THEN substr(CAST(t.tgl_bayar AS TEXT),1,4)||'-'||
+                         substr(CAST(t.tgl_bayar AS TEXT),5,2)||'-'||
+                         substr(CAST(t.tgl_bayar AS TEXT),7,2)
+                    ELSE CAST(t.tgl_bayar AS TEXT) END as tanggal,
+               t.angsuran_per_bulan as jumlah,
+               t.bulan as catatan
+        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+        WHERE (t.status='LUNAS' OR t.total_tagihan < 1)
+        {mkt_cond}
+        ORDER BY tanggal DESC
+        LIMIT 300
+    """, params + params).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -849,6 +924,54 @@ def check_db_schema():
 check_db_schema()
 
 # ── DASHBOARD MARKETING REAL-TIME ──────────────────────────────
+
+@app.route("/api/dashboard/tren-tahunan")
+@login_required
+def dashboard_tren_tahunan():
+    tahun = request.args.get("tahun", datetime.now().strftime("%Y"))
+    conn = get_db()
+    BULAN_LABEL = ["","Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"]
+
+    bulanan = []
+    for m in range(1, 13):
+        bulan = f"{tahun}-{m:02d}"
+        row = conn.execute("""
+            SELECT COUNT(*) as total,
+                SUM(CASE WHEN (status='LUNAS' OR total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
+                SUM(CASE WHEN (status='BELUM' AND total_tagihan >= 1) THEN 1 ELSE 0 END) as belum,
+                SUM(CASE WHEN (status='LUNAS' OR total_tagihan < 1) THEN angsuran_per_bulan ELSE 0 END) as terkumpul,
+                SUM(CASE WHEN (status='BELUM' AND total_tagihan >= 1) THEN total_tagihan ELSE 0 END) as tunggakan
+            FROM tagihan WHERE bulan=?
+        """, [bulan]).fetchone()
+        bulanan.append({
+            "bulan": bulan, "label": BULAN_LABEL[m],
+            "total": row[0] or 0, "lunas": row[1] or 0, "belum": row[2] or 0,
+            "terkumpul": row[3] or 0, "tunggakan": row[4] or 0,
+        })
+
+    mkt_rows = conn.execute(
+        "SELECT DISTINCT marketing_nama FROM nasabah WHERE aktif=1 AND marketing_nama IS NOT NULL ORDER BY marketing_nama"
+    ).fetchall()
+
+    per_marketing = []
+    for mkt_row in mkt_rows:
+        mkt = mkt_row[0]
+        mkt_data = []
+        for m in range(1, 13):
+            bulan = f"{tahun}-{m:02d}"
+            r = conn.execute("""
+                SELECT COUNT(*) as total,
+                    SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
+                    SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as terkumpul
+                FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+                WHERE t.bulan=? AND n.marketing_nama=?
+            """, [bulan, mkt]).fetchone()
+            mkt_data.append({"bulan": bulan, "total": r[0] or 0, "lunas": r[1] or 0, "terkumpul": r[2] or 0})
+        per_marketing.append({"nama": mkt, "data": mkt_data})
+
+    conn.close()
+    return jsonify({"tahun": tahun, "bulanan": bulanan, "per_marketing": per_marketing})
+
 @app.route("/api/dashboard/marketing")
 @login_required
 def dashboard_marketing():
@@ -857,15 +980,15 @@ def dashboard_marketing():
     role = get_user_role()
     marketing_id = session.get("marketing_id")
 
-    if role == "admin":
+    if role in ("admin","leader"):
         rows = conn.execute("""
             SELECT n.marketing_nama, n.marketing_id,
                 COUNT(*) as total,
-                SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as lunas,
-                SUM(CASE WHEN t.status='BELUM' THEN 1 ELSE 0 END) as belum,
-                SUM(CASE WHEN t.status='LUNAS' THEN t.total_tagihan ELSE 0 END) as nominal_lunas,
-                SUM(CASE WHEN t.status='BELUM' THEN t.total_tagihan ELSE 0 END) as nominal_belum,
-                SUM(t.total_tagihan) as total_tagihan
+                SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
+                SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN 1 ELSE 0 END) as belum,
+                SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas,
+                SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN t.total_tagihan ELSE 0 END) as nominal_belum,
+                SUM(t.angsuran_per_bulan) as total_tagihan
             FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
             WHERE t.bulan=?
             GROUP BY n.marketing_nama, n.marketing_id ORDER BY lunas DESC
@@ -874,11 +997,11 @@ def dashboard_marketing():
         rows = conn.execute("""
             SELECT n.marketing_nama, n.marketing_id,
                 COUNT(*) as total,
-                SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as lunas,
-                SUM(CASE WHEN t.status='BELUM' THEN 1 ELSE 0 END) as belum,
-                SUM(CASE WHEN t.status='LUNAS' THEN t.total_tagihan ELSE 0 END) as nominal_lunas,
-                SUM(CASE WHEN t.status='BELUM' THEN t.total_tagihan ELSE 0 END) as nominal_belum,
-                SUM(t.total_tagihan) as total_tagihan
+                SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
+                SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN 1 ELSE 0 END) as belum,
+                SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas,
+                SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN t.total_tagihan ELSE 0 END) as nominal_belum,
+                SUM(t.angsuran_per_bulan) as total_tagihan
             FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
             WHERE t.bulan=? AND n.marketing_id=?
             GROUP BY n.marketing_nama, n.marketing_id
@@ -895,7 +1018,7 @@ def dashboard_marketing():
 
     kolek = conn.execute("""
         SELECT t.kolektibilitas, COUNT(*) as total,
-            SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as lunas,
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
             SUM(t.total_tagihan) as nominal
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=?
@@ -974,10 +1097,10 @@ def ranking_marketing():
     bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
     rows = conn.execute("""
         SELECT n.marketing_nama, COUNT(*) as total_nasabah,
-            SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as lunas,
-            SUM(CASE WHEN t.status='BELUM' THEN 1 ELSE 0 END) as belum,
-            SUM(CASE WHEN t.status='LUNAS' THEN t.total_tagihan ELSE 0 END) as nominal_lunas,
-            ROUND(CAST(SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) AS FLOAT)/CAST(COUNT(*) AS FLOAT)*100,1) as pct_kolektibilitas
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
+            SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN 1 ELSE 0 END) as belum,
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas,
+            ROUND(CAST(SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) AS FLOAT)/CAST(COUNT(*) AS FLOAT)*100,1) as pct_kolektibilitas
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=?
         GROUP BY n.marketing_nama ORDER BY pct_kolektibilitas DESC, nominal_lunas DESC
@@ -1028,10 +1151,10 @@ def kirim_laporan_harian():
     today = datetime.now().strftime("%d/%m/%Y")
     stats = conn.execute("""
         SELECT COUNT(*) as total_nasabah,
-            SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as sudah_bayar,
-            SUM(CASE WHEN t.status='BELUM' THEN 1 ELSE 0 END) as belum_bayar,
-            SUM(CASE WHEN t.status='LUNAS' THEN t.total_tagihan ELSE 0 END) as terkumpul,
-            SUM(CASE WHEN t.status='BELUM' THEN t.total_tagihan ELSE 0 END) as tunggakan
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as sudah_bayar,
+            SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN 1 ELSE 0 END) as belum_bayar,
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as terkumpul,
+            SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN t.total_tagihan ELSE 0 END) as tunggakan
         FROM tagihan t WHERE t.bulan=?
     """, [bulan]).fetchone()
     transaksi = conn.execute("""
@@ -1040,8 +1163,8 @@ def kirim_laporan_harian():
     """).fetchone()
     marketing_rows = conn.execute("""
         SELECT n.marketing_nama, COUNT(*) as total,
-            SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as lunas,
-            SUM(CASE WHEN t.status='LUNAS' THEN t.total_tagihan ELSE 0 END) as nominal_lunas
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=? GROUP BY n.marketing_nama ORDER BY lunas DESC
     """, [bulan]).fetchall()
@@ -1099,10 +1222,10 @@ def kirim_rekap_mingguan():
     today = datetime.now().strftime("%d/%m/%Y")
     rows = conn.execute("""
         SELECT n.marketing_nama, n.marketing_id, COUNT(*) as total,
-            SUM(CASE WHEN t.status='LUNAS' THEN 1 ELSE 0 END) as lunas,
-            SUM(CASE WHEN t.status='BELUM' THEN 1 ELSE 0 END) as belum,
-            SUM(CASE WHEN t.status='LUNAS' THEN t.total_tagihan ELSE 0 END) as nominal_lunas,
-            SUM(CASE WHEN t.status='BELUM' THEN t.total_tagihan ELSE 0 END) as nominal_belum
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
+            SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN 1 ELSE 0 END) as belum,
+            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas,
+            SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN t.total_tagihan ELSE 0 END) as nominal_belum
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=? GROUP BY n.marketing_nama, n.marketing_id
     """, [bulan]).fetchall()
@@ -1135,7 +1258,9 @@ def toggle_notif():
 
 # FOTO KUNJUNGAN
 @app.route("/foto_kunjungan/<path:filename>")
+@login_required
 def serve_foto_kunjungan(filename):
+    filename = os.path.basename(filename)
     from flask import send_from_directory
     import os as _os
     return send_from_directory(_os.path.join(_os.getcwd(), "data/foto_kunjungan"), filename)
@@ -1162,14 +1287,21 @@ def monitoring_nasabah():
     bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
     conn = get_db()
     ensure_kunjungan_table(conn)
-    rows = conn.execute("""
+    marketing_id = session.get("marketing_id")
+    role = get_user_role()
+    params = [bulan]
+    extra_where = ""
+    if role not in ("admin","leader","petugas") and marketing_id:
+        extra_where = " AND n.marketing_id=?"
+        params.append(marketing_id)
+    rows = conn.execute(f"""
         SELECT t.id as tagihan_id, t.no_rekening, t.total_tagihan, t.kolektibilitas,
                t.tunggakan_pokok, t.tunggakan_margin, t.status,
                n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
-        WHERE t.bulan=? AND t.kolektibilitas >= 2
+        WHERE t.bulan=? AND t.kolektibilitas >= 2{extra_where}
         ORDER BY t.kolektibilitas DESC, n.marketing_nama, n.nama
-    """, [bulan]).fetchall()
+    """, params).fetchall()
     kj = conn.execute(
         "SELECT no_rekening, COUNT(*) as jumlah FROM kunjungan WHERE bulan=? GROUP BY no_rekening",
         [bulan]).fetchall()
@@ -1229,19 +1361,72 @@ def get_kunjungan(no_rekening):
     conn.close()
     return jsonify([dict(r) for r in rows])
 
+
+
+@app.route("/api/kunjungan/<int:kj_id>", methods=["DELETE"])
+@login_required
+def hapus_kunjungan(kj_id):
+    if get_user_role() != "admin":
+        return jsonify({"error": "Akses ditolak"}), 403
+    conn = get_db()
+    row = conn.execute("SELECT foto_path FROM kunjungan WHERE id=?", [kj_id]).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Data tidak ditemukan"}), 404
+    conn.execute("DELETE FROM kunjungan WHERE id=?", [kj_id])
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/kunjungan/rekap-harian", methods=["GET"])
+@login_required
+def rekap_harian_kunjungan():
+    tanggal = request.args.get("tanggal", datetime.now().strftime("%Y-%m-%d"))
+    bulan = tanggal[:7]
+    conn = get_db()
+    marketing_id_k = session.get("marketing_id")
+    role_k = get_user_role()
+    params_k = [bulan, tanggal]
+    extra_k = ""
+    if role_k not in ("admin","leader","petugas") and marketing_id_k:
+        extra_k = " AND k.marketing_id=?"
+        params_k.append(marketing_id_k)
+    ensure_kunjungan_table(conn)
+    rows = conn.execute(f"""
+        SELECT k.id, k.no_rekening, k.tanggal, k.catatan, k.foto_path,
+               k.dicatat_oleh, k.marketing_id,
+               n.nama, n.marketing_nama,
+               t.kolektibilitas, t.total_tagihan,
+               t.tunggakan_pokok, t.tunggakan_margin, t.status
+        FROM kunjungan k
+        JOIN nasabah n ON k.no_rekening = n.no_rekening
+        LEFT JOIN tagihan t ON t.no_rekening = k.no_rekening AND t.bulan = ?
+        WHERE k.tanggal = ?{extra_k}
+        ORDER BY k.dicatat_oleh, n.nama
+    """, params_k).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
 @app.route("/api/monitoring/rekap", methods=["GET"])
 @login_required
 def monitoring_rekap():
     bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
     conn = get_db()
     ensure_kunjungan_table(conn)
-    rows = conn.execute("""
-        SELECT t.no_rekening, n.nama, n.marketing_nama, t.kolektibilitas,
+    marketing_id = session.get("marketing_id")
+    role = get_user_role()
+    params_r = [bulan]
+    extra_r = ""
+    if role not in ("admin","leader","petugas") and marketing_id:
+        extra_r = " AND n.marketing_id=?"
+        params_r.append(marketing_id)
+    rows = conn.execute(f"""
+        SELECT t.id as tagihan_id, t.no_rekening, n.nama, n.marketing_nama, t.kolektibilitas,
                t.total_tagihan, t.tunggakan_pokok, t.tunggakan_margin, t.status, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
-        WHERE t.bulan=? AND t.kolektibilitas >= 2
+        WHERE t.bulan=? AND t.kolektibilitas >= 2{extra_r}
         ORDER BY t.kolektibilitas DESC, n.marketing_nama, n.nama
-    """, [bulan]).fetchall()
+    """, params_r).fetchall()
     kj = conn.execute("""
         SELECT no_rekening, COUNT(*) as jumlah, MAX(tanggal) as terakhir,
                GROUP_CONCAT(catatan, ' || ') as catatan_all
@@ -1258,3 +1443,15 @@ def monitoring_rekap():
         d["catatan_kunjungan"] = k.get("catatan_all") or ""
         result.append(d)
     return jsonify(result)
+
+# PWA routes
+@app.route('/manifest.json')
+def pwa_manifest():
+    return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
+
+@app.route('/sw.js')
+def service_worker():
+    resp = make_response(send_from_directory('static', 'sw.js'))
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp

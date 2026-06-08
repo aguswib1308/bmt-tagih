@@ -291,14 +291,26 @@ def import_excel(filepath, diimport_oleh="admin"):
             if existing_t:
                 status_lama = existing_t[1]
                 if status_lama == 'LUNAS':
-                    # Sudah lunas di app — update angka saja, status tetap LUNAS
-                    conn.execute("""
-                        UPDATE tagihan SET plafond_pokok=?, saldo_pinjaman=?,
-                        tunggakan_pokok=?, tunggakan_margin=?, total_tagihan=?,
-                        angsuran_per_bulan=?, kolektibilitas=?, tgl_bayar=?
-                        WHERE no_rekening=? AND bulan=?
-                    """, (plafond, saldo, tung_pokok, tung_margin, total,
-                          angsuran, kolek, tgl_bayar, no_rek, bulan))
+                    # Upload data selalu menang atas input manual
+                    if total == 0 and tung_pokok == 0 and tung_margin == 0:
+                        # Excel konfirmasi lunas → tetap LUNAS, update angka
+                        conn.execute("""
+                            UPDATE tagihan SET plafond_pokok=?, saldo_pinjaman=?,
+                            tunggakan_pokok=?, tunggakan_margin=?, total_tagihan=?,
+                            angsuran_per_bulan=?, kolektibilitas=?, tgl_bayar=?
+                            WHERE no_rekening=? AND bulan=?
+                        """, (plafond, saldo, tung_pokok, tung_margin, total,
+                              angsuran, kolek, tgl_bayar, no_rek, bulan))
+                    else:
+                        # Excel masih ada tunggakan → upload data menang, revert BELUM
+                        conn.execute("""
+                            UPDATE tagihan SET plafond_pokok=?, saldo_pinjaman=?,
+                            tunggakan_pokok=?, tunggakan_margin=?, total_tagihan=?,
+                            angsuran_per_bulan=?, kolektibilitas=?, tgl_bayar=?,
+                            status='BELUM', cara_bayar=NULL
+                            WHERE no_rekening=? AND bulan=?
+                        """, (plafond, saldo, tung_pokok, tung_margin, total,
+                              angsuran, kolek, tgl_bayar, no_rek, bulan))
                 else:
                     # Cek tgl_bayar — format YYYYMMDD ambil 6 digit pertama = YYYYMM
                     bulan_bayar = None
@@ -339,13 +351,15 @@ def import_excel(filepath, diimport_oleh="admin"):
                               angsuran, kolek, tgl_bayar, no_rek, bulan))
                 tagihan_update += 1
             else:
+                st_baru = 'LUNAS' if (total == 0 and tung_pokok == 0 and tung_margin == 0) else 'BELUM'
+                cb_baru = 'SISTEM' if st_baru == 'LUNAS' else None
                 conn.execute("""
                     INSERT INTO tagihan (no_rekening, bulan, plafond_pokok, saldo_pinjaman,
                     tunggakan_pokok, tunggakan_margin, total_tagihan,
-                    angsuran_per_bulan, kolektibilitas, tgl_bayar)
-                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                    angsuran_per_bulan, kolektibilitas, tgl_bayar, status, cara_bayar)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (no_rek, bulan, plafond, saldo, tung_pokok, tung_margin,
-                      total, angsuran, kolek, tgl_bayar))
+                      total, angsuran, kolek, tgl_bayar, st_baru, cb_baru))
                 tagihan_baru += 1
 
         # Auto-nonaktifkan nasabah tidak ada di Excel

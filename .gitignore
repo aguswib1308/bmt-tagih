@@ -40,3 +40,7 @@ __pycache__/
 .env
 data/koperasi.db
 data/notif_flag.txt
+
+# Self-hosted vendor
+static/chart.min.js
+static/fonts/
