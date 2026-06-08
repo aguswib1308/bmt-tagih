@@ -102,7 +102,8 @@ os.makedirs("data", exist_ok=True)
 os.makedirs("data/foto_kunjungan", exist_ok=True)
 
 DB_PATH = os.environ.get("DB_PATH", "data/koperasi.db")
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+app.config['SESSION_PERMANENT'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
 

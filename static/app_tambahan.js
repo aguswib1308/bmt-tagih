@@ -928,3 +928,6 @@ async function renderRekapHarianIsi(tgl){
   }
   box.innerHTML=html;
 }
+
+// ── INIT ──────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", initApp);
