@@ -1570,6 +1570,7 @@ const KOL_BG    = ["","#eafaf1","#fef9e7","#fdedec","#f9ebea","#f4ecf7"];
 
 state.monitorKolFilter = 0; // 0=semua
 state.monitorTab = false;
+state.monitorSearch = "";
 
 async function renderMonitoringKol() {
   const main = document.getElementById("mainContent");
@@ -1589,9 +1590,16 @@ async function renderMonitoringKol() {
       + '</div>'
     : '';
 
+  const searchVal = state.monitorSearch || "";
   main.innerHTML = '<div class="section-title">🔍 Monitoring Kolektibilitas 2–5</div>'
     + tabHtml
-    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">'+filterBtns+'</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">'+filterBtns+'</div>'
+    + '<div style="margin-bottom:12px;position:relative;">'
+    + '<input id="monitorSearchInput" type="text" placeholder="Cari nama, no rekening, atau marketing..." value="'+searchVal.replace(/"/g,'&quot;')+'"'
+    + ' oninput="setMonitorSearch(this.value)"'
+    + ' style="width:100%;box-sizing:border-box;padding:9px 36px 9px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;outline:none;">'
+    + (searchVal ? '<button onclick="setMonitorSearch('')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray-400);">✕</button>' : '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--gray-400);">🔍</span>')
+    + '</div>'
     + '<div id="monitorContent"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
 
   if (state.monitorTab === 1 && canFullReport) {
@@ -1613,14 +1621,43 @@ function setMonitorTab(idx) {
   renderMonitoringKol();
 }
 
+function setMonitorSearch(val) {
+  state.monitorSearch = val;
+  // Re-filter tanpa reload API
+  if (state._monitorListRows) {
+    renderMonitorListData(state._monitorListRows);
+  } else if (state._rekapBulanRows && state.monitorTab === 1) {
+    renderRekapBulanIsi(state._rekapBulanRows, state.bulan);
+  } else {
+    renderMonitoringKol();
+  }
+  // Update input value jika kosong (dari tombol X)
+  const inp = document.getElementById('monitorSearchInput');
+  if (inp && !val) { inp.value = ''; }
+}
+
 async function loadMonitorList(bulan) {
   const box = document.getElementById("monitorContent");
   const rows = await api("/api/monitoring/nasabah?bulan=" + bulan);
+  state._monitorListRows = rows;
+  renderMonitorListData(rows);
+}
+
+function renderMonitorListData(rows) {
+  const bulan = state.bulan;
+  const box = document.getElementById("monitorContent");
+  if (!box) return;
   if (!Array.isArray(rows) || rows.length === 0) {
     box.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Tidak ada nasabah kolektibilitas 2–5 bulan ini</p></div>';
     return;
   }
-  const filtered = state.monitorKolFilter > 0 ? rows.filter(r => r.kolektibilitas === state.monitorKolFilter) : rows;
+  const q = (state.monitorSearch || "").toLowerCase().trim();
+  let filtered = state.monitorKolFilter > 0 ? rows.filter(r => r.kolektibilitas === state.monitorKolFilter) : rows;
+  if (q) filtered = filtered.filter(r =>
+    (r.nama || "").toLowerCase().includes(q) ||
+    (r.no_rekening || "").toLowerCase().includes(q) ||
+    (r.marketing_nama || "").toLowerCase().includes(q)
+  );
   if (filtered.length === 0) {
     box.innerHTML = '<div class="empty-state"><p>Tidak ada nasabah untuk filter ini</p></div>';
     return;
