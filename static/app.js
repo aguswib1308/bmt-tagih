@@ -1598,7 +1598,7 @@ async function renderMonitoringKol() {
     + '<input id="monitorSearchInput" type="text" placeholder="Cari nama, no rekening, atau marketing..." value="'+searchVal.replace(/"/g,'&quot;')+'"'
     + ' oninput="setMonitorSearch(this.value)"'
     + ' style="width:100%;box-sizing:border-box;padding:9px 36px 9px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;outline:none;">'
-    + (searchVal ? '<button onclick="setMonitorSearch('')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray-400);">✕</button>' : '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--gray-400);">🔍</span>')
+    + (searchVal ? '<button onclick="clearMonitorSearch()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray-400);">✕</button>' : '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--gray-400);">🔍</span>')
     + '</div>'
     + '<div id="monitorContent"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
 
@@ -1621,6 +1621,7 @@ function setMonitorTab(idx) {
   renderMonitoringKol();
 }
 
+function clearMonitorSearch() { setMonitorSearch(""); }
 function setMonitorSearch(val) {
   state.monitorSearch = val;
   // Re-filter tanpa reload API
