@@ -1205,6 +1205,16 @@ function esc(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ── TAMBAHAN FITUR BMT ─────────────────────────────────────────
 // Patch navigate - dipanggil setelah DOM ready
@@ -1526,7 +1536,16 @@ async function testNotif(tipe) {
   }
   toast("📲 "+(res.terkirim||0)+" notifikasi terkirim");
 }
-// initTambahanNav dipanggil langsung dari initApp() dan doLogin()
+// Init nav setelah login
+document.addEventListener("DOMContentLoaded", function() {
+  const origShowApp = window.showApp;
+  if (origShowApp) {
+    window.showApp = function() {
+      origShowApp.call(this);
+      setTimeout(initTambahanNav, 300);
+    };
+  }
+});
 // ── TOGGLE NOTIF UI ─────────────────────────────────────────────
 async function loadToggleNotif() {
   const res = await api("/api/notif/status");
@@ -1571,7 +1590,6 @@ const KOL_BG    = ["","#eafaf1","#fef9e7","#fdedec","#f9ebea","#f4ecf7"];
 
 state.monitorKolFilter = 0; // 0=semua
 state.monitorTab = false;
-state.monitorSearch = "";
 
 async function renderMonitoringKol() {
   const main = document.getElementById("mainContent");
@@ -1625,7 +1643,6 @@ function setMonitorTab(idx) {
 function clearMonitorSearch() { setMonitorSearch(""); }
 function setMonitorSearch(val) {
   state.monitorSearch = val;
-  // Re-filter tanpa reload API
   if (state._monitorListRows) {
     renderMonitorListData(state._monitorListRows);
   } else if (state._rekapBulanRows && state.monitorTab === 1) {
@@ -1633,7 +1650,6 @@ function setMonitorSearch(val) {
   } else {
     renderMonitoringKol();
   }
-  // Update input value jika kosong (dari tombol X)
   const inp = document.getElementById('monitorSearchInput');
   if (inp && !val) { inp.value = ''; }
 }
@@ -1702,11 +1718,17 @@ function renderMonitorListData(rows) {
 async function loadMonitorRekap(bulan) {
   if (!state.rekapBulanView) state.rekapBulanView = 'kartu';
   const box = document.getElementById("monitorContent");
-  box.innerHTML = '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">'
+  box.innerHTML = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
     + '<div style="display:flex;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">'
     + '<button id="rbKartu" onclick="setRekapBulanView(\'kartu\')" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">Kartu</button>'
     + '<button id="rbList"  onclick="setRekapBulanView(\'list\')"  style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">List</button>'
-    + '</div></div>'
+    + '</div>'
+    + '<div style="display:flex;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;flex:1;">'
+    + '<button id="rfSemua" onclick="setRekapBulanKunjFilter(\'semua\')" style="padding:7px 0;border:none;cursor:pointer;font-size:11px;font-weight:700;flex:1;">Semua</button>'
+    + '<button id="rfDikunjungi" onclick="setRekapBulanKunjFilter(\'dikunjungi\')" style="padding:7px 0;border:none;cursor:pointer;font-size:11px;font-weight:700;flex:1;">✅ Dikunjungi</button>'
+    + '<button id="rfBelum" onclick="setRekapBulanKunjFilter(\'belum\')" style="padding:7px 0;border:none;cursor:pointer;font-size:11px;font-weight:700;flex:1;">⬜ Belum</button>'
+    + '</div>'
+    + '</div>'
     + '<div id="rbIsi"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
   syncRekapBulanBtn();
   const rows = await api("/api/monitoring/rekap?bulan=" + bulan);
@@ -1721,8 +1743,24 @@ function syncRekapBulanBtn() {
   bk.style.color = isK ? '#fff' : 'var(--gray-500)';
   bl.style.background = !isK ? 'var(--green-mid)' : '#fff';
   bl.style.color = !isK ? '#fff' : 'var(--gray-500)';
+  syncRekapBulanKunjFilterBtn();
 }
 
+function setRekapBulanKunjFilter(v) {
+  state.rekapBulanKunjFilter = v;
+  syncRekapBulanKunjFilterBtn();
+  if (state._rekapBulanRows) renderRekapBulanIsi(state._rekapBulanRows, state.bulan);
+}
+function syncRekapBulanKunjFilterBtn() {
+  const cur = state.rekapBulanKunjFilter || 'semua';
+  [['rfSemua','semua'],['rfDikunjungi','dikunjungi'],['rfBelum','belum']].forEach(([id,val]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const active = cur === val;
+    btn.style.background = active ? 'var(--green-mid)' : '#fff';
+    btn.style.color = active ? '#fff' : 'var(--gray-500)';
+  });
+}
 function setRekapBulanView(v) {
   state.rekapBulanView = v;
   syncRekapBulanBtn();
@@ -1737,7 +1775,12 @@ function renderRekapBulanIsi(rows, bulan) {
     box.innerHTML = '<div class="empty-state"><p>Tidak ada data rekap</p></div>';
     return;
   }
-  const filtered = state.monitorKolFilter > 0 ? rows.filter(r => r.kolektibilitas === state.monitorKolFilter) : rows;
+  let filtered = state.monitorKolFilter > 0 ? rows.filter(r => r.kolektibilitas === state.monitorKolFilter) : rows;
+  if (state.rekapBulanKunjFilter === 'dikunjungi') {
+    filtered = filtered.filter(r => r.jumlah_kunjungan > 0);
+  } else if (state.rekapBulanKunjFilter === 'belum') {
+    filtered = filtered.filter(r => !(r.jumlah_kunjungan > 0));
+  }
   const totalTagihan = filtered.reduce((s, r) => s + (r.total_tagihan || 0), 0);
   const sudahKunjung = filtered.filter(r => r.jumlah_kunjungan > 0).length;
 
@@ -2009,16 +2052,12 @@ async function loadRekapHarian(){
   const box=document.getElementById("monitorContent");
   if(!state.rekapHarianTgl) state.rekapHarianTgl=todayStr();
   if(!state.rekapHarianView) state.rekapHarianView='kartu';
-  box.innerHTML=
-    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">'
+  box.innerHTML='<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">'
     +'<input type="date" id="rhTgl" value="'+state.rekapHarianTgl+'" onchange="gantiTglRekap(this.value)" style="flex:1;padding:8px 10px;border:1px solid var(--gray-200);border-radius:8px;font-size:13px;min-width:0;">'
     +'<div style="display:flex;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">'
-    +'<button onclick="setRekapViewKartu()" id="rvKartu" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">Kartu</button>'
-    +'<button onclick="setRekapViewList()" id="rvList" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">List</button>'
-    +'</div>'
-    +'<button onclick="renderRekapHarianIsi(state.rekapHarianTgl)" style="padding:8px 10px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;" title="Refresh">&#x1F504;</button>'
-    +'</div>'
-    +'<div id="rhIsi"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
+    +'<button onclick="setRekapView(\'kartu\')" id="rvKartu" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">Kartu</button>'
+    +'<button onclick="setRekapView(\'list\')" id="rvList" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">List</button>'
+    +'</div></div><div id="rhIsi"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
   syncRekapViewBtn();
   await renderRekapHarianIsi(state.rekapHarianTgl);
 }
@@ -2037,8 +2076,6 @@ function gantiTglRekap(val){
   state.rekapHarianTgl=val;
   renderRekapHarianIsi(val);
 }
-function setRekapViewKartu(){setRekapView("kartu");}
-function setRekapViewList(){setRekapView("list");}
 function setRekapView(v){
   state.rekapHarianView=v;
   syncRekapViewBtn();
@@ -2091,7 +2128,6 @@ async function renderRekapHarianIsi(tgl){
           +'<div style="display:flex;justify-content:space-between;align-items:center;">'
           +'<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.nama+'</div>'
           +(kol?'<span style="background:'+KOL_BG[kol]+';color:'+KOL_COLOR[kol]+';font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;margin-left:4px;white-space:nowrap;">'+KOL_LABEL[kol]+'</span>':'')
-          +'</div>'
           +'<div style="font-size:11px;color:var(--gray-500);margin-top:2px;">'+(r.dicatat_oleh||'-')+' · '+(r.total_tagihan?rpShort(r.total_tagihan):'-')+(tung?' · tung '+rpShort(tung):'')+(r.status==='LUNAS'?' · <span style="background:#eafaf1;color:#27ae60;font-weight:800;padding:1px 7px;border-radius:99px;">✅ LUNAS</span>':' · <span style="background:#fdedec;color:#e74c3c;font-weight:700;padding:1px 7px;border-radius:99px;">BELUM</span>')+'</div>'
           +(r.catatan?'<div style="font-size:11px;color:var(--gray-600);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.catatan)+'</div>':'')
           +'</div></div>';

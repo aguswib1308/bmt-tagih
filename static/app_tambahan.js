@@ -511,11 +511,17 @@ function renderMonitorListData(rows) {
 async function loadMonitorRekap(bulan) {
   if (!state.rekapBulanView) state.rekapBulanView = 'kartu';
   const box = document.getElementById("monitorContent");
-  box.innerHTML = '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">'
+  box.innerHTML = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
     + '<div style="display:flex;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">'
     + '<button id="rbKartu" onclick="setRekapBulanView(\'kartu\')" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">Kartu</button>'
     + '<button id="rbList"  onclick="setRekapBulanView(\'list\')"  style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">List</button>'
-    + '</div></div>'
+    + '</div>'
+    + '<div style="display:flex;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;flex:1;">'
+    + '<button id="rfSemua" onclick="setRekapBulanKunjFilter(\'semua\')" style="padding:7px 0;border:none;cursor:pointer;font-size:11px;font-weight:700;flex:1;">Semua</button>'
+    + '<button id="rfDikunjungi" onclick="setRekapBulanKunjFilter(\'dikunjungi\')" style="padding:7px 0;border:none;cursor:pointer;font-size:11px;font-weight:700;flex:1;">✅ Dikunjungi</button>'
+    + '<button id="rfBelum" onclick="setRekapBulanKunjFilter(\'belum\')" style="padding:7px 0;border:none;cursor:pointer;font-size:11px;font-weight:700;flex:1;">⬜ Belum</button>'
+    + '</div>'
+    + '</div>'
     + '<div id="rbIsi"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
   syncRekapBulanBtn();
   const rows = await api("/api/monitoring/rekap?bulan=" + bulan);
@@ -530,8 +536,24 @@ function syncRekapBulanBtn() {
   bk.style.color = isK ? '#fff' : 'var(--gray-500)';
   bl.style.background = !isK ? 'var(--green-mid)' : '#fff';
   bl.style.color = !isK ? '#fff' : 'var(--gray-500)';
+  syncRekapBulanKunjFilterBtn();
 }
 
+function setRekapBulanKunjFilter(v) {
+  state.rekapBulanKunjFilter = v;
+  syncRekapBulanKunjFilterBtn();
+  if (state._rekapBulanRows) renderRekapBulanIsi(state._rekapBulanRows, state.bulan);
+}
+function syncRekapBulanKunjFilterBtn() {
+  const cur = state.rekapBulanKunjFilter || 'semua';
+  [['rfSemua','semua'],['rfDikunjungi','dikunjungi'],['rfBelum','belum']].forEach(([id,val]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const active = cur === val;
+    btn.style.background = active ? 'var(--green-mid)' : '#fff';
+    btn.style.color = active ? '#fff' : 'var(--gray-500)';
+  });
+}
 function setRekapBulanView(v) {
   state.rekapBulanView = v;
   syncRekapBulanBtn();
@@ -546,7 +568,12 @@ function renderRekapBulanIsi(rows, bulan) {
     box.innerHTML = '<div class="empty-state"><p>Tidak ada data rekap</p></div>';
     return;
   }
-  const filtered = state.monitorKolFilter > 0 ? rows.filter(r => r.kolektibilitas === state.monitorKolFilter) : rows;
+  let filtered = state.monitorKolFilter > 0 ? rows.filter(r => r.kolektibilitas === state.monitorKolFilter) : rows;
+  if (state.rekapBulanKunjFilter === 'dikunjungi') {
+    filtered = filtered.filter(r => r.jumlah_kunjungan > 0);
+  } else if (state.rekapBulanKunjFilter === 'belum') {
+    filtered = filtered.filter(r => !(r.jumlah_kunjungan > 0));
+  }
   const totalTagihan = filtered.reduce((s, r) => s + (r.total_tagihan || 0), 0);
   const sudahKunjung = filtered.filter(r => r.jumlah_kunjungan > 0).length;
 
