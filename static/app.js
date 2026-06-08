@@ -648,7 +648,8 @@ async function renderHistori() {
     if (!data.length) return '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px;">🔍 Tidak ada hasil</div>';
     return data.map((p) => {
       const cbLabel = p.cara_bayar === 'SISTEM' ? '⚡ Auto' : (p.cara_bayar || 'TUNAI');
-      const bulanInfo = p.catatan ? (' · ' + bulanLabel(p.catatan)) : '';
+      const isBulanFmt = p.catatan && /^\d{4}-\d{2}$/.test(p.catatan);
+      const bulanInfo = p.catatan ? (' · ' + (isBulanFmt ? bulanLabel(p.catatan) : p.catatan)) : '';
       return '<div class="histori-item">' +
         '<div class="histori-left">' +
           '<div class="h-nama">' + p.nama + '</div>' +
@@ -2013,7 +2014,8 @@ async function loadRekapHarian(){
     +'<div style="display:flex;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">'
     +'<button onclick="setRekapView(\'kartu\')" id="rvKartu" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">Kartu</button>'
     +'<button onclick="setRekapView(\'list\')" id="rvList" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">List</button>'
-    +'</div></div><div id="rhIsi"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
+    +'<button onclick="renderRekapHarianIsi(state.rekapHarianTgl)" style="padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;" title="Refresh data">&#x1F504;</button>'
+    +'</div><div id="rhIsi"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
   syncRekapViewBtn();
   await renderRekapHarianIsi(state.rekapHarianTgl);
 }
