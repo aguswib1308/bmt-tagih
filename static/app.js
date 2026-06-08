@@ -77,8 +77,17 @@ async function api(path, method = "GET", body = null, isForm = false) {
   } else if (isForm) {
     opts.body = body;
   }
-  const res = await fetch(path, opts);
-  return res.json();
+  try {
+    const res = await fetch(path, opts);
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { error: "Server error (status " + res.status + ")" };
+    }
+  } catch (e) {
+    return { error: "Koneksi gagal: " + e.message };
+  }
 }
 
 // ── TOAST ──────────────────────────────────────────────────────
@@ -768,7 +777,13 @@ async function doImport(input) {
   const form = new FormData();
   form.append("file", file);
 
-  const res = await api("/api/import", "POST", form, true);
+  let res;
+  try {
+    res = await api("/api/import", "POST", form, true);
+  } catch (e) {
+    progressEl.innerHTML = '<div class="error-msg">❌ Gagal upload: ' + e.message + '</div>';
+    return;
+  }
 
   if (res.error) {
     progressEl.innerHTML = '<div class="error-msg">❌ ' + res.error + '</div>';
