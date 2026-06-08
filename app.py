@@ -33,22 +33,31 @@ def get_gdrive_creds():
     import json
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request
+    from datetime import datetime
     SCOPES = ["https://www.googleapis.com/auth/drive"]
     token_path = os.path.join("data", "gdrive_token.json")
-    secret_path = os.path.join("data", "gdrive_client_secret.json")
     with open(token_path) as f:
         tdata = json.load(f)
+    expiry = None
+    if tdata.get("expiry"):
+        try:
+            expiry = datetime.fromisoformat(tdata["expiry"])
+        except Exception:
+            expiry = None
     creds = Credentials(
         token=tdata.get("token"),
         refresh_token=tdata.get("refresh_token"),
         token_uri=tdata.get("token_uri", "https://oauth2.googleapis.com/token"),
         client_id=tdata.get("client_id"),
         client_secret=tdata.get("client_secret"),
-        scopes=tdata.get("scopes", SCOPES)
+        scopes=tdata.get("scopes", SCOPES),
+        expiry=expiry
     )
-    if not creds.valid:
+    if not creds.valid or creds.expiry is None:
         creds.refresh(Request())
         tdata["token"] = creds.token
+        if creds.expiry:
+            tdata["expiry"] = creds.expiry.isoformat()
         with open(token_path, "w") as f:
             json.dump(tdata, f)
     return creds
