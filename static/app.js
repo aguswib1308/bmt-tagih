@@ -2009,13 +2009,16 @@ async function loadRekapHarian(){
   const box=document.getElementById("monitorContent");
   if(!state.rekapHarianTgl) state.rekapHarianTgl=todayStr();
   if(!state.rekapHarianView) state.rekapHarianView='kartu';
-  box.innerHTML='<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">'
+  box.innerHTML=
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">'
     +'<input type="date" id="rhTgl" value="'+state.rekapHarianTgl+'" onchange="gantiTglRekap(this.value)" style="flex:1;padding:8px 10px;border:1px solid var(--gray-200);border-radius:8px;font-size:13px;min-width:0;">'
     +'<div style="display:flex;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">'
-    +'<button onclick="setRekapView(\'kartu\')" id="rvKartu" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">Kartu</button>'
-    +'<button onclick="setRekapView(\'list\')" id="rvList" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">List</button>'
-    +'<button onclick="renderRekapHarianIsi(state.rekapHarianTgl)" style="padding:8px 12px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;" title="Refresh data">&#x1F504;</button>'
-    +'</div><div id="rhIsi"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
+    +'<button onclick="setRekapView('kartu')" id="rvKartu" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">Kartu</button>'
+    +'<button onclick="setRekapView('list')" id="rvList" style="padding:7px 12px;border:none;cursor:pointer;font-size:12px;font-weight:700;">List</button>'
+    +'</div>'
+    +'<button onclick="renderRekapHarianIsi(state.rekapHarianTgl)" style="padding:8px 10px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;" title="Refresh">&#x1F504;</button>'
+    +'</div>'
+    +'<div id="rhIsi"><div class="loading"><div class="spinner"></div> Memuat...</div></div>';
   syncRekapViewBtn();
   await renderRekapHarianIsi(state.rekapHarianTgl);
 }
