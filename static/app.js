@@ -2056,7 +2056,9 @@ async function renderRekapHarianIsi(tgl){
       const kol=r.kolektibilitas||0;
       const tung=(r.tunggakan_pokok||0)+(r.tunggakan_margin||0);
       const fu=r.foto_path?getFotoUrl(r.foto_path):null;
-      return '<div class="card" style="margin-bottom:10px;padding:0;overflow:hidden;">'
+      const isLunas = r.status === 'LUNAS';
+      return '<div class="card" style="margin-bottom:10px;padding:0;overflow:hidden;'+(isLunas?'border:2px solid #27ae60;':'')+'">'
+        +(isLunas?'<div style="background:#27ae60;color:#fff;padding:7px 14px;font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px;"><span style="font-size:15px;">✅</span> SUDAH BAYAR — Tagihan bulan ini LUNAS</div>':'')
         +(fu?'<a href="'+fu+'" target="_blank"><img src="'+fu+'" style="width:100%;max-height:180px;object-fit:cover;display:block;" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></a>':'')
         +'<div style="padding:12px 14px;">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
@@ -2082,7 +2084,7 @@ async function renderRekapHarianIsi(tgl){
           +'<div style="display:flex;justify-content:space-between;align-items:center;">'
           +'<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.nama+'</div>'
           +(kol?'<span style="background:'+KOL_BG[kol]+';color:'+KOL_COLOR[kol]+';font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;margin-left:4px;white-space:nowrap;">'+KOL_LABEL[kol]+'</span>':'')
-          +'</div><div style="font-size:11px;color:var(--gray-500);">'+(r.dicatat_oleh||'-')+' \xb7 '+(r.total_tagihan?rpShort(r.total_tagihan):'-')+(tung?' \xb7 tung '+rpShort(tung):'')+' \xb7 '+(r.status||'-')+'</div>'
+          +'<div style="font-size:11px;color:var(--gray-500);margin-top:2px;">'+(r.dicatat_oleh||'-')+' · '+(r.total_tagihan?rpShort(r.total_tagihan):'-')+(tung?' · tung '+rpShort(tung):'')+(r.status==='LUNAS'?' · <span style="background:#eafaf1;color:#27ae60;font-weight:800;padding:1px 7px;border-radius:99px;">✅ LUNAS</span>':' · <span style="background:#fdedec;color:#e74c3c;font-weight:700;padding:1px 7px;border-radius:99px;">BELUM</span>')+'</div>'
           +(r.catatan?'<div style="font-size:11px;color:var(--gray-600);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.catatan)+'</div>':'')
           +'</div></div>';
       }).join('')+'</div>';
