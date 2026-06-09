@@ -275,14 +275,25 @@ def import_excel(filepath, diimport_oleh="admin"):
             ).fetchone()
 
             if existing:
-                conn.execute("""
-                    UPDATE nasabah SET nama=?, no_hp=COALESCE(NULLIF(no_hp,''), ?),
-                    marketing_id=?, marketing_nama=?, tanggal_jt=?,
-                    alamat=?, kabupaten=?, aktif=1,
-                    tgl_realisasi=?, is_reschedule=?
-                    WHERE no_rekening=?
-                """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten,
-                         tgl_realisasi, is_reschedule, no_rek))
+                # is_reschedule: jangan overwrite kalau kolom tidak ada di Excel
+                if COL_RESCHEDULE:
+                    conn.execute("""
+                        UPDATE nasabah SET nama=?, no_hp=COALESCE(NULLIF(no_hp,''), ?),
+                        marketing_id=?, marketing_nama=?, tanggal_jt=?,
+                        alamat=?, kabupaten=?, aktif=1,
+                        tgl_realisasi=?, is_reschedule=?
+                        WHERE no_rekening=?
+                    """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten,
+                             tgl_realisasi, is_reschedule, no_rek))
+                else:
+                    conn.execute("""
+                        UPDATE nasabah SET nama=?, no_hp=COALESCE(NULLIF(no_hp,''), ?),
+                        marketing_id=?, marketing_nama=?, tanggal_jt=?,
+                        alamat=?, kabupaten=?, aktif=1,
+                        tgl_realisasi=?
+                        WHERE no_rekening=?
+                    """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten,
+                             tgl_realisasi, no_rek))
                 nasabah_update += 1
             else:
                 conn.execute("""
