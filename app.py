@@ -138,6 +138,25 @@ def format_tgl_jt(tgl_str):
     if m: return m.group(1)
     return tgl_str
 
+def get_setting(key, default=None):
+    """Ambil satu nilai dari tabel app_settings."""
+    try:
+        conn = get_db()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                keterangan TEXT
+            )
+        """)
+        conn.commit()
+        row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+        conn.close()
+        return row["value"] if row else default
+    except:
+        return default
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -235,6 +254,41 @@ def health():
     return jsonify({"status": "ok", "time": datetime.now().isoformat()})
 
 # â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+@app.route("/api/settings", methods=["GET"])
+@admin_required
+def get_all_settings():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY, value TEXT, keterangan TEXT
+        )
+    """)
+    defaults = [
+        ("delay_blast_detik", "10", "Jeda antar pesan WA saat blast (detik)"),
+    ]
+    for k, v, ket in defaults:
+        conn.execute("INSERT OR IGNORE INTO app_settings (key,value,keterangan) VALUES (?,?,?)",
+                     (k, v, ket))
+    conn.commit()
+    rows = conn.execute("SELECT key, value, keterangan FROM app_settings ORDER BY key").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/settings/<key>", methods=["PUT"])
+@admin_required
+def update_setting(key):
+    data = request.json
+    value = str(data.get("value", ""))
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO app_settings (key, value) VALUES (?,?)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+    """, (key, value))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
@@ -342,6 +396,24 @@ def update_user(user_id):
     conn.close()
     return jsonify({"success": True})
 
+@app.route("/api/users/<int:user_id>/password", methods=["PUT"])
+@admin_required
+def change_user_password(user_id):
+    data = request.json
+    new_pw = (data.get("password") or "").strip()
+    if len(new_pw) < 4:
+        return jsonify({"error": "Password minimal 4 karakter"}), 400
+    conn = get_db()
+    user = conn.execute("SELECT id FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({"error": "User tidak ditemukan"}), 404
+    conn.execute("UPDATE users SET password=? WHERE id=?", (hash_pw(new_pw), user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
 @app.route("/api/users/<int:user_id>/reset", methods=["PUT"])
 @admin_required
 def reset_user_password(user_id):
@@ -390,6 +462,7 @@ def dashboard():
             FROM tagihan t
             JOIN nasabah n ON t.no_rekening = n.no_rekening
             WHERE t.bulan=?
+              AND n.marketing_nama NOT GLOB '[0-9]*'
             GROUP BY n.marketing_nama
             ORDER BY lunas DESC
         """, [bulan]).fetchall()
@@ -494,6 +567,59 @@ def tagihan_jatuh_tempo():
     conn.close()
     return jsonify({"data": [dict(r) for r in rows], "total": len(rows),
                     "today_day": today_day, "bulan": bulan})
+
+
+@app.route("/api/reminder/blast-jt-hari-ini", methods=["POST"])
+@admin_required
+def blast_jt_hari_ini():
+    """Kirim notif WA ke semua anggota yang jatuh tempo hari ini."""
+    from datetime import datetime
+    bulan = request.json.get("bulan", datetime.now().strftime("%Y-%m"))
+    today_day = int(datetime.now().strftime("%d"))
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT t.id, t.no_rekening, t.total_tagihan, t.angsuran_per_bulan,
+               t.tunggakan_pokok, t.tunggakan_margin,
+               n.nama, n.no_hp, n.tanggal_jt, n.marketing_nama
+        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+        WHERE t.bulan=? AND t.status='BELUM'
+          AND t.total_tagihan >= 1
+          AND CAST(SUBSTR(n.tanggal_jt, 7, 2) AS INTEGER) = ?
+          AND (n.is_reschedule=0 OR n.is_reschedule IS NULL)
+    """, (bulan, today_day)).fetchall()
+    conn.close()
+
+    terkirim = gagal = skip = 0
+    detail = []
+    for row in rows:
+        if not row["no_hp"]:
+            skip += 1
+            detail.append({"nama": row["nama"], "status": "skip", "alasan": "no HP"})
+            continue
+        tgl = format_tgl_jt(row["tanggal_jt"])
+        angs = row["angsuran_per_bulan"] or 0
+        total = row["total_tagihan"] or 0
+        if angs > 0:
+            actual_tung = max(0, round(total - angs))
+            nominal = angs if actual_tung > 0 else total
+        else:
+            actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
+            nominal = total
+        pesan = pesan_tagihan(row["nama"], nominal, tgl, row["marketing_nama"],
+                              no_akad=row["no_rekening"], tunggakan=actual_tung)
+        result = kirim_wa(row["no_hp"], pesan)
+        if result.get("status") == "success":
+            terkirim += 1
+            detail.append({"nama": row["nama"], "status": "ok"})
+        else:
+            gagal += 1
+            detail.append({"nama": row["nama"], "status": "gagal", "alasan": str(result)})
+        if len(rows) > 1:
+            import time as _t
+            _t.sleep(max(1, int(get_setting('delay_blast_detik', '10'))))
+
+    return jsonify({"success": True, "terkirim": terkirim,
+                    "gagal": gagal, "skip": skip, "detail": detail})
 
 @app.route("/api/bayar", methods=["POST"])
 @login_required
@@ -608,11 +734,11 @@ def preview_blast():
     hanya_hari_ini = data.get("hanya_hari_ini", False)
 
     conn = get_db()
-    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != '' AND t.kolektibilitas IN (1,2)"
+    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != '' AND t.kolektibilitas IN (1,2) AND (n.is_reschedule=0 OR n.is_reschedule IS NULL)"
     params = [bulan]
 
     rows = conn.execute(f"""
-        SELECT t.id, t.total_tagihan, t.kolektibilitas, n.nama, n.no_rekening, n.no_hp, n.marketing_nama, n.tanggal_jt
+        SELECT t.id, t.total_tagihan, t.kolektibilitas, n.nama, n.no_rekening, n.no_hp, n.marketing_nama, n.tanggal_jt, n.is_reschedule
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         {where}
         ORDER BY t.kolektibilitas DESC, n.tanggal_jt ASC
@@ -654,7 +780,7 @@ def execute_blast():
             conn.execute("UPDATE tagihan SET total_tagihan=? WHERE id=?", (float(nom), tag_id))
     conn.commit()
 
-    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != '' AND t.kolektibilitas IN (1,2)"
+    where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != '' AND t.kolektibilitas IN (1,2) AND (n.is_reschedule=0 OR n.is_reschedule IS NULL)"
     params = [bulan]
 
     rows = conn.execute(f"""
@@ -689,7 +815,7 @@ def execute_blast():
             terkirim += 1
         else:
             gagal += 1
-        time.sleep(5)
+        time.sleep(max(1, int(get_setting('delay_blast_detik', '10'))))
 
     return jsonify({"success": True, "terkirim": terkirim, "gagal": gagal})
 
@@ -1001,6 +1127,7 @@ def dashboard_marketing():
                 SUM(t.angsuran_per_bulan) as total_tagihan
             FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
             WHERE t.bulan=?
+              AND n.marketing_nama NOT GLOB '[0-9]*'
             GROUP BY n.marketing_nama, n.marketing_id ORDER BY lunas DESC
         """, [bulan]).fetchall()
     else:
@@ -1017,30 +1144,51 @@ def dashboard_marketing():
             GROUP BY n.marketing_nama, n.marketing_id
         """, [bulan, marketing_id]).fetchall()
 
+    bulan_num = bulan.replace('-', '')  # e.g. '202606'
+    is_marketing = role not in ("admin", "leader")
+    mkt_join_filter = "AND n.marketing_id=?" if is_marketing else ""
+    mkt_args_bn = [bulan, bulan_num] + ([marketing_id] if is_marketing else [])
+    mkt_args_b  = [bulan] + ([marketing_id] if is_marketing else [])
+
     tren = conn.execute("""
-        SELECT strftime('%d', p.tanggal) as hari,
+        SELECT substr(t.tgl_bayar, 7, 2) as hari,
             COUNT(*) as jumlah_transaksi,
-            SUM(p.jumlah) as total_nominal
-        FROM pembayaran p JOIN tagihan t ON p.tagihan_id = t.id
-        WHERE t.bulan=?
-        GROUP BY strftime('%d', p.tanggal) ORDER BY hari ASC
-    """, [bulan]).fetchall()
+            SUM(t.angsuran_per_bulan) as total_nominal
+        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+        WHERE t.bulan=? AND t.status='LUNAS'
+          AND t.tgl_bayar IS NOT NULL AND length(t.tgl_bayar) = 8
+          AND substr(t.tgl_bayar, 1, 6) = ?
+          AND t.tgl_bayar <= strftime('%Y%m%d', 'now', 'localtime')
+          """ + mkt_join_filter + """
+        GROUP BY substr(t.tgl_bayar, 7, 2) ORDER BY hari ASC
+    """, mkt_args_bn).fetchall()
 
     kolek = conn.execute("""
         SELECT t.kolektibilitas, COUNT(*) as total,
             SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
             SUM(t.total_tagihan) as nominal
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
-        WHERE t.bulan=?
+        WHERE t.bulan=? """ + mkt_join_filter + """
         GROUP BY t.kolektibilitas ORDER BY t.kolektibilitas ASC
-    """, [bulan]).fetchall()
+    """, mkt_args_b).fetchall()
 
     top_tunggak = conn.execute("""
         SELECT n.nama, n.no_rekening, n.marketing_nama, t.total_tagihan, t.kolektibilitas
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
-        WHERE t.bulan=? AND t.status='BELUM'
-        ORDER BY t.total_tagihan DESC LIMIT 5
-    """, [bulan]).fetchall()
+        WHERE t.bulan=? AND t.status='BELUM' """ + mkt_join_filter + """
+        ORDER BY t.total_tagihan DESC LIMIT 25
+    """, mkt_args_b).fetchall()
+
+    npf_row = conn.execute("""
+        SELECT
+            COALESCE(SUM(CASE WHEN t.kolektibilitas >= 3 THEN t.saldo_pinjaman ELSE 0 END), 0) as npf_nominal,
+            COALESCE(SUM(t.saldo_pinjaman), 0) as total_saldo,
+            COUNT(CASE WHEN t.kolektibilitas >= 3 THEN 1 END) as npf_count,
+            COUNT(*) as total_count
+        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
+        WHERE t.bulan=? """ + mkt_join_filter + """
+    """, mkt_args_b).fetchone()
+    npf_pct = round(npf_row[0] / npf_row[1] * 100, 2) if npf_row[1] > 0 else 0
 
     conn.close()
     return jsonify({
@@ -1048,6 +1196,13 @@ def dashboard_marketing():
         "tren_harian": [dict(r) for r in tren],
         "kolektibilitas": [dict(r) for r in kolek],
         "top_tunggak": [dict(r) for r in top_tunggak],
+        "npf": {
+            "pct": npf_pct,
+            "nominal": npf_row[0],
+            "total_saldo": npf_row[1],
+            "npf_count": npf_row[2],
+            "total_count": npf_row[3]
+        },
         "bulan": bulan
     })
 
@@ -1113,6 +1268,7 @@ def ranking_marketing():
             ROUND(CAST(SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) AS FLOAT)/CAST(COUNT(*) AS FLOAT)*100,1) as pct_kolektibilitas
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=?
+          AND n.marketing_nama NOT GLOB '[0-9]*'
         GROUP BY n.marketing_nama ORDER BY pct_kolektibilitas DESC, nominal_lunas DESC
     """, [bulan]).fetchall()
     conn.close()
@@ -1131,9 +1287,9 @@ def get_jadwal():
         )
     """)
     defaults = [
-        ("reminder_h3","08:00",1,"Reminder H-3 jatuh tempo ke anggota"),
+        ("reminder_h3","08:00",1,"Reminder jatuh tempo hari ini ke anggota"),
         ("laporan_harian","17:00",1,"Laporan harian ke admin & marketing"),
-        ("rekap_mingguan","07:00",1,"Rekap mingguan per marketing (Senin)"),
+        ("rekap_mingguan","17:00",1,"Rekap mingguan per marketing (Jumat)"),
     ]
     for tipe, jam, aktif, ket in defaults:
         conn.execute("INSERT OR IGNORE INTO jadwal_notif (tipe,jam,aktif,keterangan) VALUES (?,?,?,?)",(tipe,jam,aktif,ket))
@@ -1200,15 +1356,17 @@ def kirim_reminder_h3():
     conn = get_db()
     bulan = datetime.now().strftime("%Y-%m")
     today = datetime.now()
-    target_hari = today.day + 3
+    target_hari = today.day  # kirim ke nasabah yang jatuh tempo HARI INI
     rows = conn.execute("""
-        SELECT t.id, t.total_tagihan, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
+        SELECT t.id, t.total_tagihan, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt,
+               n.no_rekening, t.angsuran_per_bulan, t.tunggakan_pokok, t.tunggakan_margin
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != ''
-        AND t.kolektibilitas IN (1,2)
+        AND (n.is_reschedule=0 OR n.is_reschedule IS NULL)
     """, [bulan]).fetchall()
     conn.close()
     terkirim = gagal = skip = 0
+    delay = int(get_setting('delay_blast_detik', '10'))
     for row in rows:
         tgl = str(row["tanggal_jt"] or "")
         try:
@@ -1217,31 +1375,141 @@ def kirim_reminder_h3():
                 skip += 1; continue
         except:
             skip += 1; continue
-        pesan = f"⏰ *REMINDER JATUH TEMPO*\n\nAssalamu'alaikum, {row['nama']} 🙏\n\nTagihan Anda akan jatuh tempo *3 hari lagi* (tgl {tgl_num}).\n💰 *Total:* {format_rp(row['total_tagihan'])}\n👤 *Marketing:* {row['marketing_nama']}\n\nMohon segera siapkan pembayaran 🙏\n_Pesan otomatis - Jangan dibalas_"
+        angs = row["angsuran_per_bulan"] or 0
+        total = row["total_tagihan"] or 0
+        if angs > 0:
+            actual_tung = max(0, round(total - angs))
+            nominal = angs if actual_tung > 0 else total
+        else:
+            actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
+            nominal = total
+        tgl_fmt = format_tgl_jt(row["tanggal_jt"])
+        pesan = pesan_tagihan(row["nama"], nominal, tgl_fmt, row["marketing_nama"],
+                              no_akad=row["no_rekening"], tunggakan=actual_tung)
         result = kirim_wa(row["no_hp"], pesan)
         if result.get("status") == True: terkirim += 1
         else: gagal += 1
-        time.sleep(3)
+        if terkirim + gagal < len(rows): time.sleep(max(3, delay))
     return jsonify({"success": True, "terkirim": terkirim, "gagal": gagal, "skip": skip, "target_hari": target_hari})
 
 @app.route("/api/notif/rekap-mingguan", methods=["POST"])
 @admin_required
 def kirim_rekap_mingguan():
+    import time as _time
     conn = get_db()
     bulan = datetime.now().strftime("%Y-%m")
-    today = datetime.now().strftime("%d/%m/%Y")
-    rows = conn.execute("""
-        SELECT n.marketing_nama, n.marketing_id, COUNT(*) as total,
-            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
-            SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN 1 ELSE 0 END) as belum,
-            SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas,
-            SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN t.total_tagihan ELSE 0 END) as nominal_belum
-        FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
-        WHERE t.bulan=? GROUP BY n.marketing_nama, n.marketing_id
-    """, [bulan]).fetchall()
+    hari_ini = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"][datetime.now().weekday()]
+    today_str = datetime.now().strftime("%d/%m/%Y")
+
+    sql_total = (
+        "SELECT COUNT(*) as total,"
+        " SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,"
+        " SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN 1 ELSE 0 END) as belum,"
+        " SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas,"
+        " SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN t.total_tagihan ELSE 0 END) as nominal_belum"
+        " FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening WHERE t.bulan=?"
+    )
+    total_row = conn.execute(sql_total, [bulan]).fetchone()
+
+    sql_mkt = (
+        "SELECT n.marketing_nama, COUNT(*) as total,"
+        " SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,"
+        " SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN 1 ELSE 0 END) as belum,"
+        " SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN t.angsuran_per_bulan ELSE 0 END) as nominal_lunas,"
+        " SUM(CASE WHEN (t.status='BELUM' AND t.total_tagihan >= 1) THEN t.total_tagihan ELSE 0 END) as nominal_belum"
+        " FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening"
+        " WHERE t.bulan=? AND n.marketing_nama NOT GLOB '[0-9]*'"
+        " GROUP BY n.marketing_nama ORDER BY lunas DESC"
+    )
+    mkt_rows = conn.execute(sql_mkt, [bulan]).fetchall()
+
+    users = conn.execute(
+        "SELECT username, nama, role, no_hp FROM users"
+        " WHERE no_hp IS NOT NULL AND no_hp != '' AND no_hp NOT LIKE '%xxxxx%'"
+    ).fetchall()
     conn.close()
-    terkirim = len(rows)
-    return jsonify({"success": True, "terkirim": terkirim, "gagal": 0, "total_marketing": len(rows)})
+
+    def fmt_rp(v):
+        v = int(v or 0)
+        if v >= 1000000: return "Rp {:.1f}jt".format(v / 1000000)
+        if v >= 1000: return "Rp {}rb".format(v // 1000)
+        return "Rp {}".format(v)
+
+    pct_total = round(total_row['lunas'] / total_row['total'] * 100, 1) if (total_row and total_row['total']) else 0
+    t_lunas  = total_row['lunas']         if total_row else 0
+    t_belum  = total_row['belum']         if total_row else 0
+    t_total  = total_row['total']         if total_row else 0
+    n_lunas  = total_row['nominal_lunas'] if total_row else 0
+    n_belum  = total_row['nominal_belum'] if total_row else 0
+
+    pesan_overall = (
+        "\U0001f4cb *REKAP MINGGUAN BMT*\n"
+        "{}, {}\n\n"
+        "*Bulan: {}*\n"
+        "Total Nasabah: {}\n"
+        "✅ Lunas: {} ({}%)\n"
+        "⏳ Belum: {}\n"
+        "\U0001f4b0 Terkumpul: {}\n"
+        "\U0001f4c9 Sisa Tagihan: {}\n\n"
+        "*Per Marketing:*\n"
+    ).format(hari_ini, today_str, bulan, t_total, t_lunas, pct_total, t_belum, fmt_rp(n_lunas), fmt_rp(n_belum))
+
+    for r in mkt_rows:
+        pct_m = round(r['lunas'] / r['total'] * 100, 0) if r['total'] else 0
+        pesan_overall += "• {}: {}/{} ({}%)\n".format(r['marketing_nama'], r['lunas'], r['total'], int(pct_m))
+    pesan_overall += "\n_Pesan otomatis BMT Billing System_"
+
+    terkirim = gagal = 0
+    delay = max(2, int(get_setting('delay_blast_detik', '10')) // 3)
+    mkt_dict = {r['marketing_nama'].upper(): r for r in mkt_rows}
+    sent_hps = set()
+
+    admin_hp = os.environ.get("ADMIN_HP", "")
+    if admin_hp:
+        res = kirim_wa(admin_hp, pesan_overall)
+        if res.get("status") is True: terkirim += 1
+        else: gagal += 1
+        sent_hps.add(admin_hp)
+
+    for usr in users:
+        hp = usr['no_hp']
+        if hp in sent_hps:
+            continue
+        sent_hps.add(hp)
+        role = usr['role']
+        nama = usr['nama']
+
+        if role == 'marketing':
+            mkt_data = mkt_dict.get(nama.upper())
+            if not mkt_data:
+                continue
+            pct_m2 = round(mkt_data['lunas'] / mkt_data['total'] * 100, 1) if mkt_data['total'] else 0
+            pesan_mkt = (
+                "\U0001f4cb *REKAP MINGGUAN - {}*\n"
+                "{}, {}\n\n"
+                "*Nasabah Anda ({}):*\n"
+                "Total: {} nasabah\n"
+                "✅ Lunas: {} ({}%)\n"
+                "⏳ Belum: {}\n"
+                "\U0001f4b0 Terkumpul: {}\n"
+                "\U0001f4c9 Sisa: {}\n\n"
+                "_Pesan otomatis BMT Billing System_"
+            ).format(
+                nama, hari_ini, today_str, bulan,
+                mkt_data['total'], mkt_data['lunas'], pct_m2, mkt_data['belum'],
+                fmt_rp(mkt_data['nominal_lunas']), fmt_rp(mkt_data['nominal_belum'])
+            )
+            res = kirim_wa(hp, pesan_mkt)
+        else:
+            # leader / petugas: ringkasan keseluruhan
+            res = kirim_wa(hp, pesan_overall)
+
+        if res.get("status") is True: terkirim += 1
+        else: gagal += 1
+        _time.sleep(delay)
+
+    return jsonify({"success": True, "terkirim": terkirim, "gagal": gagal,
+                    "total_marketing": len(mkt_rows), "preview_pesan": pesan_overall})
 
 # ── TOGGLE NOTIF ───────────────────────────────────────────────
 @app.route("/api/notif/status", methods=["GET"])

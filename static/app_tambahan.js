@@ -75,6 +75,12 @@ function initTambahanNav() {
   bMon.onclick=function(){ closeAdminMenu(); state.page="monitoring_kol"; document.querySelectorAll(".nav-item").forEach(function(el){el.classList.toggle("active",el.dataset.page==="monitoring_kol");}); renderPage(); };
   nav.appendChild(bMon);
 
+  // Task 1: Sembunyikan tab Histori (Pembayaran) dari akun marketing
+  if (navRole === 'marketing') {
+    var histBtn = document.querySelector('.nav-item[data-page="histori"]');
+    if (histBtn) histBtn.parentNode.removeChild(histBtn);
+  }
+
   // Statistik: admin & leader
   if (isAdmin || isLeader) {
     var bStat = document.createElement("button");
@@ -247,7 +253,25 @@ async function renderMarketingDashboard() {
   const trenHtml = data.tren_harian.length===0
     ? '<div style="text-align:center;color:var(--gray-400);padding:16px;font-size:13px;">Belum ada transaksi bulan ini</div>'
     : '<div style="display:flex;align-items:flex-end;gap:4px;height:80px;padding:8px 0;">'+data.tren_harian.map(t=>{const p=Math.round((t.total_nominal/maxN)*100);return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;background:var(--primary);border-radius:3px 3px 0 0;height:'+p+'%;min-height:3px;"></div><div style="font-size:8px;color:var(--gray-400);">'+t.hari+'</div></div>';}).join("")+'</div>';
+  // Task 5: Hitung NPL (Kol 2-5)
+  const nplCount = data.kolektibilitas.filter(function(k){ return k.kolektibilitas >= 2; }).reduce(function(s,k){ return s+k.total; }, 0);
+  const totalKolCount = data.kolektibilitas.reduce(function(s,k){ return s+k.total; }, 0);
+  const nplPct = totalKolCount > 0 ? Math.round(nplCount / totalKolCount * 1000) / 10 : 0;
+  const nplColor = nplPct < 5 ? '#166534' : nplPct < 10 ? '#92400e' : '#991b1b';
+  const nplBg    = nplPct < 5 ? '#f0fdf4' : nplPct < 10 ? '#fffbeb' : '#fff1f2';
+  const nplBorder= nplPct < 5 ? '#bbf7d0' : nplPct < 10 ? '#fde68a' : '#fecdd3';
+  const nplIcon  = nplPct < 5 ? '✅' : nplPct < 10 ? '⚠️' : '🔴';
+  const nplLabel = nplPct < 5 ? 'Aman' : nplPct < 10 ? 'Perlu Perhatian' : 'Kritis';
+  const nplHtml  = '<div style="background:'+nplBg+';border:1.5px solid '+nplBorder+';border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">'
+    + '<div><div style="font-size:12px;color:'+nplColor+';font-weight:700;">NPL (Non-Performing Loan) — Kol 2-5</div>'
+    + '<div style="font-size:11px;color:#888;margin-top:2px;">'+nplCount+' dari '+totalKolCount+' nasabah · Batas aman: <b>5%</b></div></div>'
+    + '<div style="text-align:right;">'
+    + '<div style="font-size:22px;font-weight:900;color:'+nplColor+';">'+nplPct+'%</div>'
+    + '<div style="font-size:11px;font-weight:700;color:'+nplColor+';">'+nplIcon+' '+nplLabel+'</div>'
+    + '</div></div>';
+
   main.innerHTML = bulanPickerHtml(state.bulan)+
+    '<div class="section-title">📉 Rasio NPL</div><div class="card" style="padding:14px;">'+nplHtml+'</div>'+
     '<div class="section-title">📊 Kolektibilitas</div><div class="card" style="padding:16px;">'+kolHtml+'</div>'+
     '<div class="section-title">📈 Tren Pembayaran Harian</div><div class="card" style="padding:16px;">'+trenHtml+'</div>'+
     '<div class="section-title">🏆 Ranking Marketing '+bulanLabel(state.bulan)+'</div><div class="card">'+(rankHtml||'<div class="empty-state" style="padding:16px;"><p>Belum ada data</p></div>')+'</div>'+
@@ -656,10 +680,15 @@ function bukaFormKunjungan(no_rek, nama, bulan, tagihan_id) {
     + '<textarea id="kunjCatatan" class="modal-input" rows="4" placeholder="Kondisi nasabah, alasan tunggakan, janji bayar, dll..." style="resize:none;"></textarea>'
     + '<div class="modal-label" style="margin-top:12px;">Foto Kunjungan (opsional)</div>'
     + '<div id="fotoPreviewBox" style="margin-bottom:12px;">'
-    + '<label style="display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:20px;cursor:pointer;gap:8px;">'
-    + '<span style="font-size:28px;">📷</span><span style="font-size:12px;color:var(--gray-500);">Tap untuk ambil/pilih foto</span>'
+    + '<div style="display:flex;gap:8px;">'
+    + '<label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:14px;cursor:pointer;gap:6px;">'
+    + '<span style="font-size:24px;">📷</span><span style="font-size:11px;color:var(--gray-500);">Kamera</span>'
+    + '<input type="file" id="kunjFotoKamera" accept="image/*" capture="environment" style="display:none;" onchange="previewFoto(this)">'
+    + '</label>'
+    + '<label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:14px;cursor:pointer;gap:6px;">'
+    + '<span style="font-size:24px;">🖼️</span><span style="font-size:11px;color:var(--gray-500);">Galeri</span>'
     + '<input type="file" id="kunjFoto" accept="image/*" style="display:none;" onchange="previewFoto(this)">'
-    + '</label></div>'
+    + '</label></div></div>'
     + '<div id="kunjunganRiwayat" style="margin-bottom:12px;"></div>'
     + (tagihan_id ? '<div style="margin-bottom:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;">'
         + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
@@ -697,10 +726,15 @@ function previewFoto(input) {
 function hapusFotoPreview() {
   _selectedFotoFile = null;
   document.getElementById("fotoPreviewBox").innerHTML =
-    '<label style="display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:20px;cursor:pointer;gap:8px;">'
-    + '<span style="font-size:28px;">📷</span><span style="font-size:12px;color:var(--gray-500);">Tap untuk ambil/pilih foto</span>'
+    '<div style="display:flex;gap:8px;">'
+    + '<label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:14px;cursor:pointer;gap:6px;">'
+    + '<span style="font-size:24px;">📷</span><span style="font-size:11px;color:var(--gray-500);">Kamera</span>'
+    + '<input type="file" id="kunjFotoKamera" accept="image/*" capture="environment" style="display:none;" onchange="previewFoto(this)">'
+    + '</label>'
+    + '<label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:14px;cursor:pointer;gap:6px;">'
+    + '<span style="font-size:24px;">🖼️</span><span style="font-size:11px;color:var(--gray-500);">Galeri</span>'
     + '<input type="file" id="kunjFoto" accept="image/*" style="display:none;" onchange="previewFoto(this)">'
-    + '</label>';
+    + '</label></div>';
 }
 
 async function submitKunjungan(e, no_rek, bulan, tagihan_id) {
@@ -930,4 +964,61 @@ async function renderRekapHarianIsi(tgl){
 }
 
 // ── INIT ──────────────────────────────────────────────────────
+
+// ── TASK 7: Batasi kirim WA hanya untuk admin ─────────────────────────────
+(function() {
+  // Override renderTagihanCard to hide WA button for non-admin
+  var _origRTC = window.renderTagihanCard;
+  if (_origRTC) {
+    window.renderTagihanCard = function(t) {
+      var html = _origRTC(t);
+      if (!state.user || state.user.role !== 'admin') {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        tmp.querySelectorAll('.btn-sm.wa').forEach(function(btn) {
+          var next = btn.nextElementSibling;
+          if (next && next.textContent.trim() === '✏️') next.remove();
+          btn.remove();
+        });
+        return tmp.innerHTML;
+      }
+      return html;
+    };
+  }
+
+  // Override loadJatuhTempoMarketing to hide WA buttons for non-admin
+  var _origLJTM = window.loadJatuhTempoMarketing;
+  if (_origLJTM) {
+    window.loadJatuhTempoMarketing = async function(bulan) {
+      var html = await _origLJTM.call(this, bulan);
+      if (state.user && state.user.role === 'admin') return html;
+      var div = document.createElement('div');
+      div.innerHTML = html || '';
+      div.querySelectorAll('[title="Kirim WA"]').forEach(function(el){ el.remove(); });
+      return div.innerHTML;
+    };
+  }
+
+  // Safety net: block kirimNotifJT for non-admin
+  var _origKNJT = window.kirimNotifJT;
+  window.kirimNotifJT = async function(id, btn) {
+    if (!state.user || state.user.role !== 'admin') {
+      if (typeof toast === 'function') toast('⛔ Hanya admin yang dapat mengirim notif WA');
+      return;
+    }
+    if (_origKNJT) return _origKNJT.call(this, id, btn);
+  };
+
+  // Safety net: block blastNotifJT for non-admin
+  var _origBNJT = window.blastNotifJT;
+  window.blastNotifJT = async function(bulan) {
+    if (!state.user || state.user.role !== 'admin') {
+      if (typeof toast === 'function') toast('⛔ Hanya admin yang dapat mengirim blast WA');
+      return;
+    }
+    if (_origBNJT) return _origBNJT.call(this, bulan);
+  };
+})();
+
+
 document.addEventListener("DOMContentLoaded", initApp);

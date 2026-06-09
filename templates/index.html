@@ -424,6 +424,71 @@
       }
     }
 
+
+    /* ── Jatuh Tempo Hari Ini Card ── */
+    .jt-item {
+      display:flex; align-items:center; gap:10px;
+      padding:10px 14px; border-bottom:1px solid #f5f5f5;
+    }
+    .jt-item:last-child { border-bottom:none; }
+    .jt-info { flex:1; min-width:0; }
+    .jt-nama { font-size:13px; font-weight:700; color:#1a1a1a; }
+    .jt-sub  { font-size:11px; color:#888; margin-top:2px; }
+    .btn-jt-kirim {
+      flex-shrink:0; background:#e8f4fd; border:none;
+      border-radius:8px; padding:7px 10px; font-size:16px;
+      cursor:pointer; transition:background .15s;
+    }
+    .btn-jt-kirim:hover:not(:disabled) { background:#d0eaf9; }
+    .btn-blast-jt {
+      background:var(--primary); color:#fff; border:none;
+      border-radius:8px; cursor:pointer; font-family:inherit;
+      font-weight:700; transition:background .15s;
+    }
+    .btn-blast-jt:hover:not(:disabled) { background:#1a5276; }
+    .btn-blast-jt:disabled { opacity:.6; cursor:default; }
+    .jt-list { max-height:280px; overflow-y:auto; }
+
+
+    /* ── PWA Install Banner ── */
+    body.desktop-mode #pwaInstallBanner { bottom: 0 !important; }
+    #pwaInstallBanner {
+      position: fixed; bottom: 68px; left: 0; right: 0; z-index: 9999;
+      background: #fff; border-top: 2px solid #1a5276;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+      padding: 14px 16px 18px; display: none;
+      animation: slideUpBanner .3s ease;
+      max-width: 480px; margin: 0 auto;
+    }
+    @keyframes slideUpBanner {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .pwa-row { display: flex; align-items: center; gap: 12px; }
+    .pwa-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: #1a5276; display: flex; align-items: center;
+      justify-content: center; font-size: 22px; flex-shrink: 0;
+    }
+    .pwa-text { flex: 1; min-width: 0; }
+    .pwa-title { font-size: 13px; font-weight: 800; color: #1a1a2e; line-height: 1.2; }
+    .pwa-desc  { font-size: 11px; color: #666; margin-top: 2px; line-height: 1.4; }
+    .pwa-close {
+      background: none; border: none; font-size: 20px; color: #aaa;
+      cursor: pointer; padding: 4px; flex-shrink: 0; line-height: 1;
+    }
+    .pwa-btn-row { display: flex; gap: 8px; margin-top: 12px; }
+    .pwa-btn {
+      flex: 1; padding: 10px; border-radius: 10px; border: none;
+      font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .pwa-btn-primary { background: #1a5276; color: #fff; }
+    .pwa-btn-outline { background: #f5f5f5; color: #555; flex: 0 0 auto; padding: 10px 16px; }
+    .pwa-ios-steps {
+      margin-top: 10px; background: #f0f4f8; border-radius: 8px;
+      padding: 10px 12px; font-size: 11px; color: #444; line-height: 1.7;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -599,16 +664,109 @@
   </div>
 </div>
 
+
+<!-- ── PWA Install Banner ── -->
+<div id="pwaInstallBanner">
+  <div class="pwa-row">
+    <div class="pwa-icon">🏦</div>
+    <div class="pwa-text">
+      <div class="pwa-title">Pasang BMT Amal Muslim</div>
+      <div class="pwa-desc">Buka sebagai aplikasi — tanpa browser bar, lebih nyaman</div>
+    </div>
+    <button class="pwa-close" onclick="pwaDismiss()">✕</button>
+  </div>
+  <div class="pwa-ios-steps" id="pwaIosSteps">
+    1. Ketuk tombol <b>Bagikan</b> (icon kotak+panah atas) di bawah layar<br>
+    2. Pilih <b>"Tambahkan ke Layar Utama"</b><br>
+    3. Ketuk <b>Tambahkan</b> &rarr; buka dari ikon di home screen
+  </div>
+  <div class="pwa-btn-row">
+    <button class="pwa-btn pwa-btn-primary" id="pwaInstallBtn" onclick="pwaInstall()">
+      📲 Pasang ke Home Screen
+    </button>
+    <button class="pwa-btn pwa-btn-outline" onclick="pwaDismiss()">Nanti</button>
+  </div>
+</div>
+
 <!-- ── TOAST ── -->
 <div id="toast" class="toast hidden"></div>
 
 <!-- ── SCRIPTS ── -->
 <script src="/static/chart.min.js"></script>
-    <script src="/static/app.js?v=1780910935"></script>
+    <script src="/static/app.js?v=1780972880"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/sw.js').catch(() => {});
   }
 </script>
+
+<script>
+(function() {
+  // Cek apakah sudah standalone (dari home screen)
+  var isStandalone = window.navigator.standalone === true
+    || window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: fullscreen)').matches;
+  if (isStandalone) return; // sudah fullscreen, tidak perlu banner
+
+  // Cek apakah sudah di-dismiss dalam 7 hari
+  var dismissed = localStorage.getItem('pwa_install_dismissed');
+  if (dismissed && (Date.now() - parseInt(dismissed)) < 7 * 24 * 3600 * 1000) return;
+
+  var deferredPrompt = null;
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  var isAndroid = /android/i.test(navigator.userAgent);
+  var banner = document.getElementById('pwaInstallBanner');
+  var installBtn = document.getElementById('pwaInstallBtn');
+  var iosSteps = document.getElementById('pwaIosSteps');
+
+  // Android: tangkap event beforeinstallprompt
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    showBanner();
+  });
+
+  // iOS Safari: tampilkan instruksi manual
+  if (isIOS && !isStandalone) {
+    setTimeout(showBanner, 1500);
+    if (installBtn) installBtn.textContent = '📲 Cara Pasang di iPhone/iPad';
+    if (iosSteps) { iosSteps.style.display = 'block'; }
+  }
+
+  // Fallback Android (jika beforeinstallprompt tidak terpicu)
+  if (isAndroid && !deferredPrompt) {
+    setTimeout(function() {
+      if (!deferredPrompt) showBanner();
+    }, 2000);
+    if (installBtn) installBtn.textContent = '📲 Pasang ke Home Screen';
+  }
+
+  function showBanner() {
+    if (banner) banner.style.display = 'block';
+  }
+
+  window.pwaInstall = function() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function(result) {
+        if (result.outcome === 'accepted') pwaDismiss();
+        deferredPrompt = null;
+      });
+    } else if (isIOS) {
+      if (iosSteps) iosSteps.style.display = iosSteps.style.display === 'none' ? 'block' : 'none';
+    } else {
+      // Fallback: tunjukkan instruksi manual untuk Android
+      if (installBtn) installBtn.textContent = '⚙️ Menu browser → "Tambah ke layar utama"';
+      installBtn.onclick = null;
+    }
+  };
+
+  window.pwaDismiss = function() {
+    if (banner) banner.style.display = 'none';
+    localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+  };
+})();
+</script>
+
 </body>
 </html>

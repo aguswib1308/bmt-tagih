@@ -276,6 +276,163 @@ function changeBulan(val) {
 }
 
 // ── DASHBOARD ──────────────────────────────────────────────────
+
+// ── JATUH TEMPO HARI INI (Dashboard Admin) ────────────────────
+async function loadJatuhTempoHariIni(bulan) {
+  if (!state.user || state.user.role !== 'admin') return '';
+  try {
+    var data = await api('/api/tagihan/jatuh-tempo?bulan=' + bulan);
+    var todayStr = String(data.today_day || 0).padStart(2,'0');
+    var rows = (data.data || []).filter(function(r) {
+      return String(r.tanggal_jt || '').substr(6,2) === todayStr;
+    });
+    if (rows.length === 0) return '';
+
+    var items = rows.map(function(r) {
+      var hp = r.no_hp ? '✅' : '❌';
+      var aksiBtn = r.no_hp
+        ? '<button class="btn-jt-kirim" onclick="kirimNotifJT(' + r.id + ',this)" title="Kirim WA">📨</button>'
+        : '<button class="btn-jt-kirim btn-jt-hp" onclick="isiHpJT(\'' + r.no_rekening + '\',\'' + r.id + '\')" title="Isi No HP" style="background:#fff3cd;font-size:12px;padding:6px 8px;">📱 Isi HP</button>';
+      return '<div class="jt-item" id="jt-item-' + r.id + '">'
+        + '<div class="jt-info">'
+        +   '<div class="jt-nama">' + (r.nama || '-') + ' ' + hp + '</div>'
+        +   '<div class="jt-sub">' + r.no_rekening + ' &middot; ' + rpShort(r.total_tagihan) + '</div>'
+        +   (!r.no_hp ? '<div id="jt-hp-form-' + r.id + '" style="display:none;margin-top:6px;display:none;">'
+        +     '<input type="tel" id="jt-hp-input-' + r.id + '" placeholder="08xx / 628xx" '
+        +     'style="border:1px solid #ddd;border-radius:6px;padding:5px 8px;font-size:12px;width:140px;font-family:inherit;" />'
+        +     '<button onclick="simpanHpJT(\'' + r.no_rekening + '\',\'' + r.id + '\')" '
+        +     'style="margin-left:6px;background:var(--primary);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;">Simpan</button>'
+        +   '</div>' : '')
+        + '</div>'
+        + aksiBtn
+        + '</div>';
+    }).join('');
+
+    var adaHP = rows.filter(function(r){ return !!r.no_hp; }).length;
+
+    return '<div class="section-title" style="margin-top:12px;">🔔 Jatuh Tempo Hari Ini</div>'
+      + '<div class="card" style="padding:0;overflow:hidden;">'
+      +   '<div style="padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between;">'
+      +     '<span style="font-size:13px;color:#555;">' + rows.length + ' anggota'
+      +       (adaHP < rows.length ? ' &middot; <span style="color:#e74c3c;">' + (rows.length-adaHP) + ' no HP kosong</span>' : '')
+      +     '</span>'
+      +     (adaHP > 0
+              ? '<button class="btn-blast-jt" id="btnBlastJT" onclick="blastNotifJT(\'' + bulan + '\')" style="font-size:12px;padding:6px 12px;">📨 Kirim Semua (' + adaHP + ')</button>'
+              : '')
+      +   '</div>'
+      +   '<div class="jt-list">' + items + '</div>'
+      + '</div>';
+  } catch(e) { return ''; }
+}
+
+async function loadJatuhTempoMarketing(bulan) {
+  try {
+    var data = await api('/api/tagihan/jatuh-tempo?bulan=' + bulan);
+    var rows = data.data || [];
+    if (rows.length === 0) {
+      return '<div class="section-title" style="margin-top:4px;">📅 Sudah Jatuh Tempo</div>'
+        + '<div class="card"><div class="empty-state" style="padding:16px;">'
+        + '<p>✅ Semua nasabah Anda belum melewati jatuh tempo</p></div></div>';
+    }
+    var today = String(data.today_day || 0).padStart(2,'0');
+    var items = rows.map(function(r) {
+      var tglRaw = String(r.tanggal_jt || '').substr(6,2) || '--';
+      var isToday = tglRaw === today;
+      var bgRow   = isToday ? 'background:#fff8e1;' : '';
+      var todayBadge = isToday ? '<span style="font-size:9px;background:#f39c12;color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;font-weight:700;">HARI INI</span>' : '';
+      var aksiBtn = r.no_hp
+        ? '<button onclick="kirimNotifJT(' + r.id + ',this)" title="Kirim WA" '
+          + 'style="background:var(--primary);color:#fff;border:none;border-radius:8px;'
+          + 'padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0;">📨</button>'
+        : '<button onclick="isiHpJT(\'' + r.no_rekening + '\',\'' + r.id + '\')" title="Isi No HP" '
+          + 'style="background:#fff3cd;border:1px solid #fcd34d;color:#92400e;border-radius:8px;'
+          + 'padding:5px 8px;font-size:11px;cursor:pointer;flex-shrink:0;font-family:inherit;">📱 HP</button>';
+      return '<div id="jt-item-' + r.id + '" style="display:flex;align-items:center;gap:8px;'
+        + 'padding:8px 12px;border-bottom:1px solid #f0f0f0;' + bgRow + '">'
+        + '<div style="font-size:12px;font-weight:800;color:#c0392b;flex-shrink:0;width:26px;text-align:center;">'
+        +   tglRaw + '</div>'
+        + '<div style="flex:1;min-width:0;">'
+        +   '<div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        +     (r.nama || '-') + todayBadge + '</div>'
+        +   '<div style="font-size:10px;color:#999;margin-top:1px;">'
+        +     rpShort(r.total_tagihan) + (r.no_hp ? '' : ' · <span style="color:#e74c3c;">no HP</span>')
+        +   '</div>'
+        + '</div>'
+        + aksiBtn
+        + '</div>';
+    }).join('');
+
+    var adaHP = rows.filter(function(r){ return !!r.no_hp; }).length;
+    var noHP  = rows.length - adaHP;
+
+    return '<div class="section-title" style="margin-top:4px;">'
+      + '📅 Sudah Jatuh Tempo (' + rows.length + ' nasabah)</div>'
+      + '<div class="card" style="padding:0;overflow:hidden;">'
+      +   '<div style="padding:8px 12px 6px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;">'
+      +     '<span style="font-size:11px;color:#888;">'
+      +       (noHP > 0 ? '<span style="color:#e74c3c;font-weight:700;">' + noHP + ' no HP kosong</span> &nbsp;· ' : '')
+      +       adaHP + ' siap kirim WA'
+      +     '</span>'
+      +   '</div>'
+      +   '<div style="max-height:280px;overflow-y:auto;">' + items + '</div>'
+      + '</div>';
+  } catch(e) { return ''; }
+}
+
+
+window.kirimNotifJT = async function(id, btn) {
+  btn.disabled = true; btn.textContent = '⏳';
+  var item = document.getElementById('jt-item-' + id);
+  try {
+    var res = await api('/api/reminder/' + id, 'POST', {});
+    if (res.success) {
+      btn.textContent = '✅';
+      if (item) item.style.background = '#f0fff4';
+    } else {
+      btn.textContent = '❌'; btn.disabled = false;
+      alert('Gagal: ' + (res.error || 'Unknown'));
+    }
+  } catch(e) { btn.textContent = '❌'; btn.disabled = false; }
+};
+
+
+window.isiHpJT = function(noRek, jtId) {
+  var form = document.getElementById('jt-hp-form-' + jtId);
+  if (!form) {
+    // Fallback: gunakan modal HP yang sudah ada
+    openModalHp(noRek, null);
+    return;
+  }
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  var input = document.getElementById('jt-hp-input-' + jtId);
+  if (input && form.style.display !== 'none') input.focus();
+};
+
+window.simpanHpJT = async function(noRek, jtId) {
+  var input = document.getElementById('jt-hp-input-' + jtId);
+  if (!input) return;
+  var hp = input.value.trim();
+  if (!hp) { alert('Masukkan nomor HP terlebih dahulu'); return; }
+  var res = await api('/api/nasabah/' + noRek + '/hp', 'PUT', {no_hp: hp});
+  if (res.error) { toast('❌ Gagal: ' + res.error, 'error'); return; }
+  toast('✅ No HP disimpan');
+  // Refresh dashboard agar card terupdate
+  renderDashboard();
+};
+
+window.blastNotifJT = async function(bulan) {
+  var btn = document.getElementById('btnBlastJT');
+  if (!confirm('Kirim notif WA ke semua anggota jatuh tempo hari ini?')) return;
+  btn.disabled = true; btn.textContent = '⏳ Mengirim...';
+  try {
+    var res = await api('/api/reminder/blast-jt-hari-ini', 'POST', {bulan: bulan});
+    if (res.success) {
+      btn.textContent = '✅ Terkirim ' + res.terkirim + (res.gagal > 0 ? ' | ❌ ' + res.gagal + ' gagal' : '');
+      renderDashboard();
+    } else { btn.textContent = '❌ Gagal'; btn.disabled = false; }
+  } catch(e) { btn.textContent = '❌ Error'; btn.disabled = false; }
+};
+
 async function renderDashboard() {
   const main = document.getElementById("mainContent");
   const data = await api("/api/dashboard?bulan=" + state.bulan);
@@ -289,7 +446,11 @@ async function renderDashboard() {
   const pct = s.total_tagihan > 0 ? Math.round((s.total_terkumpul / s.total_tagihan) * 100) : 0;
 
   let rekapHtml = "";
-  if (state.user.role === "admin" && data.rekap_marketing.length > 0) {
+  const isAdminRole = state.user.role === 'admin';
+  const isMktRole   = !isAdminRole; // semua non-admin: marketing, leader, petugas
+  const jtHtml = isAdminRole ? await loadJatuhTempoHariIni(state.bulan)
+               : await loadJatuhTempoMarketing(state.bulan);
+  if ((state.user.role === "admin" || state.user.role === "leader") && data.rekap_marketing.length > 0) {
     const rows = data.rekap_marketing.map((r) => {
       const pctM = r.total > 0 ? Math.round((r.lunas / r.total) * 100) : 0;
       return '<div class="rekap-row"><div>' +
@@ -314,6 +475,7 @@ async function renderDashboard() {
       '<div class="stat-card red"><div class="stat-label">Belum Bayar</div><div class="stat-value">' + s.belum_bayar + '</div><div class="stat-sub">' + rpShort(s.total_tunggakan) + '</div></div>' +
     '</div>' +
     rekapHtml +
+    jtHtml +
     '<button class="btn-primary full" onclick="navigate(\'tagihan\')">📋 Lihat Semua Tagihan</button>';
 }
 
@@ -438,9 +600,10 @@ function renderTagihanCard(t) {
       '<button class="btn-sm outline" onclick="openModalHp(\'' + t.no_rekening + '\', event)" style="font-size:11px;padding:5px 8px;">✏️</button>'
     : '<button class="btn-sm outline" onclick="openModalHp(\'' + t.no_rekening + '\', event)">📱 Isi HP</button>';
 
+  const canBayar = state.user && state.user.role !== "marketing";
   const bayarBtn = (isLunas || isSudahBayar)
     ? '<button class="btn-sm outline" style="color:var(--green-dark);border-color:var(--green-mid);" disabled>' + (isLunas ? "✅ Lunas" : "✅ Sudah Bayar") + '</button>'
-    : '<button class="btn-sm green" onclick="openModalBayar(' + t.id + ', event)">💰 Bayar</button>';
+    : canBayar ? '<button class="btn-sm green" onclick="openModalBayar(' + t.id + ', event)">💰 Bayar</button>' : '';
 
   const isReschedule = t.is_reschedule === 1 ? '<span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:10px; padding:2px 4px; margin-right:4px;">🔄 Reschedule</span>' : '';
 
@@ -740,9 +903,8 @@ async function renderAdmin() {
 '<div class="card admin-section">' +
   '<p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Kirim reminder ke nasabah BELUM BAYAR yang punya no HP.</p>' +
   bulanPickerHtml(state.bulan) +
-  '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-    '<button class="btn-primary" style="flex:1" onclick="doBlast(false)">📲 Blast Semua</button>' +
-    '<button class="btn-primary" style="flex:1;background:var(--green-mid);" onclick="doBlast(true)">📅 Blast Hari Ini</button>' +
+  '<div style="margin-bottom:8px;">' +
+    '<button class="btn-primary" style="width:100%;background:var(--green-mid);" onclick="doBlast(true)">📅 Blast Hari Ini</button>' +
   '</div>' +
   '<p style="font-size:11px;color:var(--gray-400);">📅 Blast Hari Ini = hanya nasabah jatuh tempo tanggal ' + new Date().getDate() + '</p>' +
   '<div id="blastResult" class="hidden" style="margin-top:12px;"></div>' +
@@ -752,6 +914,68 @@ async function renderAdmin() {
 
 loadUsersAdmin();
 }
+
+async function loadPasswordMgmt() {
+  var box = document.getElementById('passwordMgmtBox');
+  if (!box) return;
+  var users = await api('/api/users');
+  if (!users || users.error) { box.innerHTML = '<div class="empty-state"><p>Gagal memuat</p></div>'; return; }
+  var roleLabel = {admin:'Admin', leader:'Leader', marketing:'Marketing', petugas:'Petugas'};
+  var rows = users.map(function(u) {
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--gray-100);">'
+      + '<div style="display:flex;align-items:center;gap:8px;">'
+      +   '<div style="flex:1;min-width:0;">'
+      +     '<div style="font-size:13px;font-weight:700;">' + (u.nama||'-') + '</div>'
+      +     '<div style="font-size:11px;color:#888;">' + u.username + ' &nbsp;·&nbsp; ' + (roleLabel[u.role]||u.role)
+      +     (u.aktif ? '' : ' &nbsp;<span style="color:#e74c3c;font-size:10px;">(nonaktif)</span>') + '</div>'
+      +   '</div>'
+      +   '<button class="btn-sm outline" style="flex-shrink:0;font-size:11px;" '
+      +     'onclick="togglePwForm(' + u.id + ')">Ganti Password</button>'
+      + '</div>'
+      + '<div id="pw-form-' + u.id + '" style="display:none;padding:8px 0 4px;">'
+      +   '<div style="display:flex;gap:8px;align-items:center;">'
+      +     '<input type="password" id="pw-input-' + u.id + '" placeholder="Password baru (min 4 karakter)" '
+      +       'style="flex:1;border:1px solid var(--gray-200);border-radius:8px;padding:7px 10px;font-size:12px;font-family:inherit;" />'
+      +     '<button class="btn-sm green" onclick="simpanPassword(' + u.id + ')">Simpan</button>'
+      +     '<button class="btn-sm outline" onclick="togglePwForm(' + u.id + ')">Batal</button>'
+      +   '</div>'
+      +   '<div id="pw-result-' + u.id + '" style="font-size:11px;margin-top:4px;"></div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  box.innerHTML = '<div style="padding:0 4px;">' + rows + '</div>';
+}
+
+window.togglePwForm = function(uid) {
+  var form = document.getElementById('pw-form-' + uid);
+  if (!form) return;
+  var isOpen = form.style.display !== 'none';
+  document.querySelectorAll('[id^="pw-form-"]').forEach(function(el){ el.style.display='none'; });
+  document.querySelectorAll('[id^="pw-result-"]').forEach(function(el){ el.innerHTML=''; });
+  if (!isOpen) {
+    form.style.display = 'block';
+    var inp = document.getElementById('pw-input-' + uid);
+    if (inp) { inp.value = ''; inp.focus(); }
+  }
+};
+
+window.simpanPassword = async function(uid) {
+  var inp = document.getElementById('pw-input-' + uid);
+  var resEl = document.getElementById('pw-result-' + uid);
+  if (!inp || !resEl) return;
+  var pw = inp.value.trim();
+  if (pw.length < 4) { resEl.innerHTML='<span style="color:#e74c3c;">Minimal 4 karakter</span>'; return; }
+  resEl.innerHTML = '<span style="color:#888;">Menyimpan...</span>';
+  var res = await api('/api/users/' + uid + '/password', 'PUT', {password: pw});
+  if (res && res.success) {
+    resEl.innerHTML = '<span style="color:var(--green-dark);">Password berhasil diganti</span>';
+    inp.value = '';
+    setTimeout(function(){ togglePwForm(uid); }, 1500);
+  } else {
+    resEl.innerHTML = '<span style="color:#e74c3c;">' + ((res && res.error) || 'Gagal') + '</span>';
+  }
+};
+
 
 async function renderTemplatePage() {
   const main = document.getElementById("mainContent");
@@ -976,19 +1200,39 @@ async function loadUsersAdmin() {
   
   list.innerHTML = users.map(u => {
     const isAktif = u.aktif === 1;
-    const badge = isAktif ? '<span class="badge badge-green">Aktif</span>' : '<span class="badge badge-red">Nonaktif</span>';
-    const btnReset = '<button class="btn-sm outline" onclick="resetPasswordUser(' + u.id + ', \'' + u.username + '\')" style="padding:4px 8px;font-size:10px;">🔑 Reset PW</button>';
-    const btnEdit = '<button class="btn-sm green" onclick="openModalUser(' + u.id + ')" style="padding:4px 8px;font-size:10px;">✏️ Edit</button>';
-    
-    return '<div class="histori-item" style="padding:10px 0;">' +
-      '<div class="histori-left">' +
-        '<div class="h-nama">' + u.nama + ' ' + badge + '</div>' +
-        '<div class="h-meta">@' + u.username + ' · AO: ' + (u.marketing_id || "-") + '</div>' +
-      '</div>' +
-      '<div class="histori-right" style="display:flex;gap:6px;">' +
-        (u.role !== 'admin' ? btnReset + btnEdit : '<span class="badge badge-gray">Admin</span>') +
-      '</div>' +
-    '</div>';
+    const roleColor = u.role==='admin'?'#7d3c98':u.role==='leader'?'#1a5276':'#1e8449';
+    const roleLabel = u.role==='admin'?'Admin':u.role==='leader'?'Leader':u.role==='petugas'?'Petugas':'Marketing';
+    const pwForm =
+        '<div id="pw-form-' + u.id + '" style="display:none;margin-top:8px;padding:8px 10px;background:#f8f9fa;border-radius:8px;">'
+      + '<div style="font-size:11px;font-weight:700;color:#555;margin-bottom:6px;">Ganti Password — ' + u.nama + '</div>'
+      + '<div style="display:flex;gap:6px;align-items:center;">'
+      +   '<input type="password" id="pw-input-' + u.id + '" placeholder="Password baru (min 4 karakter)" '
+      +     'style="flex:1;border:1px solid var(--gray-200);border-radius:7px;padding:7px 10px;font-size:12px;font-family:inherit;"/>'
+      +   '<button class="btn-sm green" style="white-space:nowrap;" onclick="simpanPassword(' + u.id + ')">Simpan</button>'
+      +   '<button class="btn-sm outline" onclick="togglePwForm(' + u.id + ')">✕</button>'
+      + '</div>'
+      + '<div id="pw-result-' + u.id + '" style="font-size:11px;margin-top:4px;"></div>'
+      + '</div>';
+
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100);">'
+      + '<div style="width:36px;height:36px;border-radius:50%;background:' + roleColor + '22;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+      +   '<span style="font-size:15px;font-weight:800;color:' + roleColor + ';">' + (u.nama||'?')[0].toUpperCase() + '</span>'
+      + '</div>'
+      + '<div style="flex:1;min-width:0;">'
+      +   '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+      +     '<span style="font-size:13px;font-weight:700;">' + u.nama + '</span>'
+      +     '<span style="font-size:10px;font-weight:700;color:' + roleColor + ';background:' + roleColor + '18;padding:2px 7px;border-radius:99px;">' + roleLabel + '</span>'
+      +     (isAktif ? '' : '<span style="font-size:10px;color:#e74c3c;background:#fdedec;padding:2px 7px;border-radius:99px;">Nonaktif</span>')
+      +   '</div>'
+      +   '<div style="font-size:11px;color:#999;margin-top:1px;">@' + u.username + (u.marketing_id ? ' · AO: ' + u.marketing_id : '') + '</div>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">'
+      +   '<button onclick="togglePwForm(' + u.id + ')" style="background:none;border:1px solid var(--gray-200);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;color:#555;white-space:nowrap;">🔑 Password</button>'
+      +   (u.role !== 'admin' ? '<button onclick="openModalUser(' + u.id + ')" style="background:var(--green-mid);border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;color:#fff;white-space:nowrap;">✏️ Edit</button>' : '')
+      + '</div>'
+      + '</div>'
+      + pwForm
+      + '</div>';
   }).join("");
 }
 
@@ -1225,6 +1469,16 @@ function esc(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ── TAMBAHAN FITUR BMT ─────────────────────────────────────────
 // Patch navigate - dipanggil setelah DOM ready
@@ -1291,6 +1545,12 @@ function initTambahanNav() {
   bMon.innerHTML='<span class="nav-icon">&#128269;</span>Monitor';
   bMon.onclick=function(){ closeAdminMenu(); state.page="monitoring_kol"; document.querySelectorAll(".nav-item").forEach(function(el){el.classList.toggle("active",el.dataset.page==="monitoring_kol");}); renderPage(); };
   nav.appendChild(bMon);
+
+  // Task 1: Sembunyikan tab Histori (Pembayaran) dari akun marketing
+  if (navRole === 'marketing') {
+    var histBtn = document.querySelector('.nav-item[data-page="histori"]');
+    if (histBtn) histBtn.parentNode.removeChild(histBtn);
+  }
 
   // Statistik: admin & leader
   if (isAdmin || isLeader) {
@@ -1464,7 +1724,25 @@ async function renderMarketingDashboard() {
   const trenHtml = data.tren_harian.length===0
     ? '<div style="text-align:center;color:var(--gray-400);padding:16px;font-size:13px;">Belum ada transaksi bulan ini</div>'
     : '<div style="display:flex;align-items:flex-end;gap:4px;height:80px;padding:8px 0;">'+data.tren_harian.map(t=>{const p=Math.round((t.total_nominal/maxN)*100);return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;background:var(--primary);border-radius:3px 3px 0 0;height:'+p+'%;min-height:3px;"></div><div style="font-size:8px;color:var(--gray-400);">'+t.hari+'</div></div>';}).join("")+'</div>';
+  // Task 5: Hitung NPL (Kol 2-5)
+  const nplCount = data.kolektibilitas.filter(function(k){ return k.kolektibilitas >= 2; }).reduce(function(s,k){ return s+k.total; }, 0);
+  const totalKolCount = data.kolektibilitas.reduce(function(s,k){ return s+k.total; }, 0);
+  const nplPct = totalKolCount > 0 ? Math.round(nplCount / totalKolCount * 1000) / 10 : 0;
+  const nplColor = nplPct < 5 ? '#166534' : nplPct < 10 ? '#92400e' : '#991b1b';
+  const nplBg    = nplPct < 5 ? '#f0fdf4' : nplPct < 10 ? '#fffbeb' : '#fff1f2';
+  const nplBorder= nplPct < 5 ? '#bbf7d0' : nplPct < 10 ? '#fde68a' : '#fecdd3';
+  const nplIcon  = nplPct < 5 ? '✅' : nplPct < 10 ? '⚠️' : '🔴';
+  const nplLabel = nplPct < 5 ? 'Aman' : nplPct < 10 ? 'Perlu Perhatian' : 'Kritis';
+  const nplHtml  = '<div style="background:'+nplBg+';border:1.5px solid '+nplBorder+';border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">'
+    + '<div><div style="font-size:12px;color:'+nplColor+';font-weight:700;">NPL (Non-Performing Loan) — Kol 2-5</div>'
+    + '<div style="font-size:11px;color:#888;margin-top:2px;">'+nplCount+' dari '+totalKolCount+' nasabah · Batas aman: <b>5%</b></div></div>'
+    + '<div style="text-align:right;">'
+    + '<div style="font-size:22px;font-weight:900;color:'+nplColor+';">'+nplPct+'%</div>'
+    + '<div style="font-size:11px;font-weight:700;color:'+nplColor+';">'+nplIcon+' '+nplLabel+'</div>'
+    + '</div></div>';
+
   main.innerHTML = bulanPickerHtml(state.bulan)+
+    '<div class="section-title">📉 Rasio NPL</div><div class="card" style="padding:14px;">'+nplHtml+'</div>'+
     '<div class="section-title">📊 Kolektibilitas</div><div class="card" style="padding:16px;">'+kolHtml+'</div>'+
     '<div class="section-title">📈 Tren Pembayaran Harian</div><div class="card" style="padding:16px;">'+trenHtml+'</div>'+
     '<div class="section-title">🏆 Ranking Marketing '+bulanLabel(state.bulan)+'</div><div class="card">'+(rankHtml||'<div class="empty-state" style="padding:16px;"><p>Belum ada data</p></div>')+'</div>'+
@@ -1873,10 +2151,15 @@ function bukaFormKunjungan(no_rek, nama, bulan, tagihan_id) {
     + '<textarea id="kunjCatatan" class="modal-input" rows="4" placeholder="Kondisi nasabah, alasan tunggakan, janji bayar, dll..." style="resize:none;"></textarea>'
     + '<div class="modal-label" style="margin-top:12px;">Foto Kunjungan (opsional)</div>'
     + '<div id="fotoPreviewBox" style="margin-bottom:12px;">'
-    + '<label style="display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:20px;cursor:pointer;gap:8px;">'
-    + '<span style="font-size:28px;">📷</span><span style="font-size:12px;color:var(--gray-500);">Tap untuk ambil/pilih foto</span>'
+    + '<div style="display:flex;gap:8px;">'
+    + '<label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:14px;cursor:pointer;gap:6px;">'
+    + '<span style="font-size:24px;">📷</span><span style="font-size:11px;color:var(--gray-500);">Kamera</span>'
+    + '<input type="file" id="kunjFotoKamera" accept="image/*" capture="environment" style="display:none;" onchange="previewFoto(this)">'
+    + '</label>'
+    + '<label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:14px;cursor:pointer;gap:6px;">'
+    + '<span style="font-size:24px;">🖼️</span><span style="font-size:11px;color:var(--gray-500);">Galeri</span>'
     + '<input type="file" id="kunjFoto" accept="image/*" style="display:none;" onchange="previewFoto(this)">'
-    + '</label></div>'
+    + '</label></div></div>'
     + '<div id="kunjunganRiwayat" style="margin-bottom:12px;"></div>'
     + (tagihan_id ? '<div style="margin-bottom:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;">'
         + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
@@ -1914,10 +2197,15 @@ function previewFoto(input) {
 function hapusFotoPreview() {
   _selectedFotoFile = null;
   document.getElementById("fotoPreviewBox").innerHTML =
-    '<label style="display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:20px;cursor:pointer;gap:8px;">'
-    + '<span style="font-size:28px;">📷</span><span style="font-size:12px;color:var(--gray-500);">Tap untuk ambil/pilih foto</span>'
+    '<div style="display:flex;gap:8px;">'
+    + '<label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:14px;cursor:pointer;gap:6px;">'
+    + '<span style="font-size:24px;">📷</span><span style="font-size:11px;color:var(--gray-500);">Kamera</span>'
+    + '<input type="file" id="kunjFotoKamera" accept="image/*" capture="environment" style="display:none;" onchange="previewFoto(this)">'
+    + '</label>'
+    + '<label style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-300);border-radius:10px;padding:14px;cursor:pointer;gap:6px;">'
+    + '<span style="font-size:24px;">🖼️</span><span style="font-size:11px;color:var(--gray-500);">Galeri</span>'
     + '<input type="file" id="kunjFoto" accept="image/*" style="display:none;" onchange="previewFoto(this)">'
-    + '</label>';
+    + '</label></div>';
 }
 
 async function submitKunjungan(e, no_rek, bulan, tagihan_id) {
@@ -2147,4 +2435,61 @@ async function renderRekapHarianIsi(tgl){
 }
 
 // ── INIT ──────────────────────────────────────────────────────
+
+// ── TASK 7: Batasi kirim WA hanya untuk admin ─────────────────────────────
+(function() {
+  // Override renderTagihanCard to hide WA button for non-admin
+  var _origRTC = window.renderTagihanCard;
+  if (_origRTC) {
+    window.renderTagihanCard = function(t) {
+      var html = _origRTC(t);
+      if (!state.user || state.user.role !== 'admin') {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        tmp.querySelectorAll('.btn-sm.wa').forEach(function(btn) {
+          var next = btn.nextElementSibling;
+          if (next && next.textContent.trim() === '✏️') next.remove();
+          btn.remove();
+        });
+        return tmp.innerHTML;
+      }
+      return html;
+    };
+  }
+
+  // Override loadJatuhTempoMarketing to hide WA buttons for non-admin
+  var _origLJTM = window.loadJatuhTempoMarketing;
+  if (_origLJTM) {
+    window.loadJatuhTempoMarketing = async function(bulan) {
+      var html = await _origLJTM.call(this, bulan);
+      if (state.user && state.user.role === 'admin') return html;
+      var div = document.createElement('div');
+      div.innerHTML = html || '';
+      div.querySelectorAll('[title="Kirim WA"]').forEach(function(el){ el.remove(); });
+      return div.innerHTML;
+    };
+  }
+
+  // Safety net: block kirimNotifJT for non-admin
+  var _origKNJT = window.kirimNotifJT;
+  window.kirimNotifJT = async function(id, btn) {
+    if (!state.user || state.user.role !== 'admin') {
+      if (typeof toast === 'function') toast('⛔ Hanya admin yang dapat mengirim notif WA');
+      return;
+    }
+    if (_origKNJT) return _origKNJT.call(this, id, btn);
+  };
+
+  // Safety net: block blastNotifJT for non-admin
+  var _origBNJT = window.blastNotifJT;
+  window.blastNotifJT = async function(bulan) {
+    if (!state.user || state.user.role !== 'admin') {
+      if (typeof toast === 'function') toast('⛔ Hanya admin yang dapat mengirim blast WA');
+      return;
+    }
+    if (_origBNJT) return _origBNJT.call(this, bulan);
+  };
+})();
+
+
 document.addEventListener("DOMContentLoaded", initApp);
