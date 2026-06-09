@@ -25,6 +25,26 @@ KODE_AO = {
     "01016": "AGUS S",
 }
 
+
+def hitung_kol(tunggakan_pokok, angsuran_per_bulan, kol_manual=1):
+    """Hitung kolektibilitas otomatis dari bulan tunggakan.
+    Kol1=<1bln, Kol2=1-3bln, Kol3=3-6bln, Kol4=6-12bln, Kol5=>12bln.
+    Mengambil nilai MAX(otomatis, manual) agar tidak auto-downgrade.
+    """
+    tung = tunggakan_pokok or 0
+    angs = angsuran_per_bulan or 0
+    if angs > 0 and tung > 0:
+        bln = tung / angs
+        if bln < 1:    kol_auto = 1
+        elif bln < 3:  kol_auto = 2
+        elif bln < 6:  kol_auto = 3
+        elif bln < 12: kol_auto = 4
+        else:          kol_auto = 5
+    else:
+        kol_auto = 1 if tung <= 0 else kol_manual
+    return max(kol_auto, kol_manual)
+
+
 def init_db():
     os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -178,7 +198,9 @@ def import_excel(filepath, diimport_oleh="admin"):
         COL_ANGS    = find_col(df, ['angsuran_per_bulan','angsuran','angs_per_bulan','angsuran per bulan'])
         COL_PLAFOND = find_col(df, ['plafond_pokok','plafond'])
         COL_KOLEK   = find_col(df, ['kolek','kolektibilitas','kol'])
-        COL_TGL_BAYAR = find_col(df, ['tgl_bayar','tanggal_bayar','tgl bayar'])
+        COL_TGL_BAYAR    = find_col(df, ['tgl_bayar','tanggal_bayar','tgl bayar'])
+        COL_REALISASI    = find_col(df, ['tgl_realisasi','tanggal_realisasi','realisasi'])
+        COL_RESCHEDULE   = find_col(df, ['is_reschedule','reschedule','rescheduled'])
 
         print(f"Mapping: rek={COL_REK} nama={COL_NAMA} hp={COL_HP} mkt={COL_MKT_ID} saldo={COL_SALDO} t_pok={COL_T_POK} t_mar={COL_T_MAR} kolek={COL_KOLEK}")
 
@@ -243,6 +265,9 @@ def import_excel(filepath, diimport_oleh="admin"):
                 # Normalisasi: pastikan 5 digit dengan leading zero
                 kode_ao = kode_ao.zfill(5)
             mkt_nm = KODE_AO.get(kode_ao, kode_ao)  # fallback ke kode kalau tidak ada di mapping
+            tgl_realisasi = v(row, COL_REALISASI)
+            is_reschedule_raw = v(row, COL_RESCHEDULE) if COL_RESCHEDULE else None
+            is_reschedule = 1 if is_reschedule_raw and str(is_reschedule_raw).strip() not in ('0','','None') else 0
 
             # UPSERT nasabah
             existing = conn.execute(
@@ -253,15 +278,20 @@ def import_excel(filepath, diimport_oleh="admin"):
                 conn.execute("""
                     UPDATE nasabah SET nama=?, no_hp=COALESCE(NULLIF(no_hp,''), ?),
                     marketing_id=?, marketing_nama=?, tanggal_jt=?,
-                    alamat=?, kabupaten=?, aktif=1 WHERE no_rekening=?
-                """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten, no_rek))
+                    alamat=?, kabupaten=?, aktif=1,
+                    tgl_realisasi=?, is_reschedule=?
+                    WHERE no_rekening=?
+                """, (nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten,
+                         tgl_realisasi, is_reschedule, no_rek))
                 nasabah_update += 1
             else:
                 conn.execute("""
                     INSERT INTO nasabah (no_rekening, nama, no_hp, marketing_id,
-                    marketing_nama, tanggal_jt, alamat, kabupaten)
-                    VALUES (?,?,?,?,?,?,?,?)
-                """, (no_rek, nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten))
+                    marketing_nama, tanggal_jt, alamat, kabupaten,
+                    tgl_realisasi, is_reschedule)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                """, (no_rek, nama, no_hp, kode_ao, mkt_nm, tgl_jt, alamat, kabupaten,
+                         tgl_realisasi, is_reschedule))
                 nasabah_baru += 1
 
             # Nilai tagihan
@@ -274,13 +304,17 @@ def import_excel(filepath, diimport_oleh="admin"):
             tgl_bayar   = v(row, COL_TGL_BAYAR)
 
             kolek_raw = v(row, COL_KOLEK)
-            kolek = 1
+            kolek_manual = 1
             if kolek_raw:
                 try:
-                    kolek = int(float(kolek_raw))
-                    kolek = max(1, min(5, kolek))
+                    kolek_manual = int(float(kolek_raw))
+                    kolek_manual = max(1, min(5, kolek_manual))
                 except:
-                    kolek = 1
+                    kolek_manual = 1
+            # Hitung kolektibilitas otomatis berdasarkan bulan tunggakan
+            tung_pok_val = tung_pokok if tung_pokok else 0
+            angs_val     = angsuran if angsuran else 0
+            kolek = hitung_kol(tung_pok_val, angs_val, kolek_manual)
 
             # UPSERT tagihan
             existing_t = conn.execute(
@@ -372,12 +406,13 @@ def import_excel(filepath, diimport_oleh="admin"):
                 nasabah_nonaktif += 1
 
         # Log import
+        waktu_wib = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute("""
             INSERT INTO import_log (bulan, filepath, nasabah_baru, nasabah_update,
-            nasabah_nonaktif, tagihan_baru, tagihan_update, diimport_oleh)
-            VALUES (?,?,?,?,?,?,?,?)
+            nasabah_nonaktif, tagihan_baru, tagihan_update, diimport_oleh, waktu)
+            VALUES (?,?,?,?,?,?,?,?,?)
         """, (bulan, os.path.basename(filepath), nasabah_baru, nasabah_update,
-              nasabah_nonaktif, tagihan_baru, tagihan_update, diimport_oleh))
+              nasabah_nonaktif, tagihan_baru, tagihan_update, diimport_oleh, waktu_wib))
 
         conn.commit()
         conn.close()

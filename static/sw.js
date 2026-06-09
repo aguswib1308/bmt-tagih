@@ -1,4 +1,4 @@
-const CACHE = 'bmt-v1';
+const CACHE = 'bmt-v1780930767';
 const SHELL = ['/', '/static/app.js', '/static/manifest.json',
                '/static/icons/icon-192.png', '/static/icons/icon-512.png'];
 

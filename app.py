@@ -556,7 +556,8 @@ def tagihan_jatuh_tempo():
     rows = conn.execute(f"""
         SELECT t.id, t.no_rekening, t.total_tagihan, t.status, t.kolektibilitas,
                t.tunggakan_pokok, t.tunggakan_margin, t.cara_bayar,
-               n.nama, n.no_hp, n.tanggal_jt, n.marketing_nama, n.alamat
+               n.nama, n.no_hp, n.tanggal_jt, n.marketing_nama, n.alamat,
+               n.is_reschedule
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=? AND t.status='BELUM'
           AND t.total_tagihan >= 1
@@ -710,7 +711,7 @@ def kirim_reminder(tagihan_id):
         conn.commit()
 
     row = conn.execute("""
-        SELECT t.*, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
+        SELECT t.*, n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt, n.is_reschedule
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.id=?
     """, (tagihan_id,)).fetchone()
@@ -718,6 +719,8 @@ def kirim_reminder(tagihan_id):
 
     if not row:
         return jsonify({"error": "Tagihan tidak ditemukan"}), 404
+    if row["is_reschedule"] == 1:
+        return jsonify({"error": "Nasabah reschedule — WA tagihan tidak dikirim. Hubungi langsung."}), 403
     if not row["no_hp"]:
         return jsonify({"error": "No HP nasabah belum diisi"}), 400
 
@@ -772,6 +775,21 @@ def preview_blast():
 
     return jsonify({"success": True, "lancar": lancar, "bermasalah": bermasalah})
 
+
+@app.route("/api/blast/task/<task_id>")
+@login_required
+def get_blast_task(task_id):
+    """Cek status background blast task"""
+    conn = get_db()
+    ensure_blast_log(conn)
+    row = conn.execute(
+        "SELECT * FROM blast_tasks WHERE task_id=?", [task_id]
+    ).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Task tidak ditemukan"}), 404
+    return jsonify(dict(row))
+
 @app.route("/api/reminder/execute_blast", methods=["POST"])
 @admin_required
 def execute_blast():
@@ -801,42 +819,97 @@ def execute_blast():
     """, params).fetchall()
     conn.close()
 
-    terkirim = gagal = 0
-    hari_ini_str = datetime.now().strftime("%d")
-    hari_ini_str_alt = hari_ini_str[1:] if hari_ini_str.startswith("0") else hari_ini_str
+    import uuid as _uuid
+    import threading as _threading
 
-    for row in rows:
-        tgl = format_tgl_jt(row["tanggal_jt"])
-        if hanya_hari_ini and tgl not in (hari_ini_str, hari_ini_str_alt):
-            continue
-
-        angs_pb = row["angsuran_per_bulan"] or 0
-        total_th = row["total_tagihan"] or 0
-        if angs_pb > 0:
-            actual_tung = max(0, round(total_th - angs_pb))
-            nominal_pesan = angs_pb if actual_tung > 0 else total_th
-        else:
-            actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
-            nominal_pesan = total_th
-        pesan = pesan_tagihan(row["nama"], nominal_pesan, tgl, row["marketing_nama"], no_akad=row["no_rekening"], tunggakan=actual_tunggakan)
-        result = kirim_wa(row["no_hp"], pesan)
-        if result.get("status") == True:
-            terkirim += 1
-        else:
-            gagal += 1
-        time.sleep(max(1, int(get_setting('delay_blast_detik', '10'))))
-
-    # Log blast ke blast_log
-    conn2 = get_db()
-    ensure_blast_log(conn2)
+    task_id = _uuid.uuid4().hex[:12]
+    username = session.get("username", "admin")
+    total_rows = len(rows)
     catatan_blast = "Blast Hari Ini" if hanya_hari_ini else "Blast Semua"
-    conn2.execute(
-        "INSERT INTO blast_log (tipe, bulan, dilakukan_oleh, terkirim, gagal, skip, catatan) VALUES (?,?,?,?,?,?,?)",
-        ("execute_blast", bulan, session.get("username", "admin"), terkirim, gagal, 0, catatan_blast)
+
+    # Buat record task di DB
+    conn_task = get_db()
+    ensure_blast_log(conn_task)
+    conn_task.execute(
+        "INSERT INTO blast_tasks (task_id, tipe, bulan, status, terkirim, gagal, total, dilakukan_oleh, catatan) VALUES (?,?,?,?,?,?,?,?,?)",
+        (task_id, "execute_blast", bulan, "running", 0, 0, total_rows, username, catatan_blast)
     )
-    conn2.commit()
-    conn2.close()
-    return jsonify({"success": True, "terkirim": terkirim, "gagal": gagal})
+    conn_task.commit()
+    conn_task.close()
+
+    def _do_blast_bg(rows_copy, bulan_copy, hanya_hari_ini_copy, task_id_copy, username_copy, catatan_copy):
+        terkirim = gagal = 0
+        hari_ini_str = datetime.now().strftime("%d")
+        hari_ini_str_alt = hari_ini_str[1:] if hari_ini_str.startswith("0") else hari_ini_str
+        try:
+            for row in rows_copy:
+                tgl = format_tgl_jt(row["tanggal_jt"])
+                if hanya_hari_ini_copy and tgl not in (hari_ini_str, hari_ini_str_alt):
+                    continue
+
+                angs_pb = row["angsuran_per_bulan"] or 0
+                total_th = row["total_tagihan"] or 0
+                if angs_pb > 0:
+                    actual_tung = max(0, round(total_th - angs_pb))
+                    nominal_pesan = angs_pb if actual_tung > 0 else total_th
+                else:
+                    actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
+                    nominal_pesan = total_th
+
+                pesan = pesan_tagihan(row["nama"], nominal_pesan, tgl, row["marketing_nama"],
+                                      no_akad=row["no_rekening"], tunggakan=actual_tung)
+                result = kirim_wa(row["no_hp"], pesan)
+                if result.get("status") == True:
+                    terkirim += 1
+                else:
+                    gagal += 1
+
+                # Update progress di DB
+                try:
+                    c2 = get_db()
+                    c2.execute(
+                        "UPDATE blast_tasks SET terkirim=?, gagal=? WHERE task_id=?",
+                        (terkirim, gagal, task_id_copy)
+                    )
+                    c2.commit()
+                    c2.close()
+                except Exception:
+                    pass
+
+                time.sleep(max(1, int(get_setting("delay_blast_detik", "10"))))
+
+            # Selesai - update status done + log ke blast_log
+            c3 = get_db()
+            ensure_blast_log(c3)
+            c3.execute(
+                "UPDATE blast_tasks SET status='done', selesai_at=datetime('now','localtime') WHERE task_id=?",
+                (task_id_copy,)
+            )
+            c3.execute(
+                "INSERT INTO blast_log (tipe, bulan, dilakukan_oleh, terkirim, gagal, skip, catatan) VALUES (?,?,?,?,?,?,?)",
+                ("execute_blast", bulan_copy, username_copy, terkirim, gagal, 0, catatan_copy)
+            )
+            c3.commit()
+            c3.close()
+        except Exception as e:
+            try:
+                c_err = get_db()
+                c_err.execute(
+                    "UPDATE blast_tasks SET status='error', catatan=? WHERE task_id=?",
+                    (str(e)[:200], task_id_copy)
+                )
+                c_err.commit()
+                c_err.close()
+            except Exception:
+                pass
+
+    t = _threading.Thread(
+        target=_do_blast_bg,
+        args=(rows, bulan, hanya_hari_ini, task_id, username, catatan_blast),
+        daemon=True
+    )
+    t.start()
+    return jsonify({"success": True, "task_id": task_id, "total": total_rows, "background": True})
 
 # â”€â”€ UPDATE NO HP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/nasabah/<no_rek>/hp", methods=["PUT"])
@@ -891,6 +964,38 @@ def histori():
     return jsonify([dict(r) for r in rows])
 
 # â”€â”€ IMPORT EXCEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+# ── AUTO IMPORT (token-based, tanpa session) ─────────────────────────────────
+@app.route("/api/import/auto", methods=["POST"])
+def import_excel_auto():
+    """Endpoint untuk upload otomatis via curl dari Windows (pakai API token)."""
+    # Validasi token
+    token_file = os.path.join(os.path.dirname(__file__), 'data', 'api_token.txt')
+    try:
+        with open(token_file) as _tf:
+            valid_token = _tf.read().strip()
+    except Exception:
+        return jsonify({"error": "Server belum dikonfigurasi token"}), 500
+
+    req_token = request.headers.get('X-BMT-Token', '').strip()
+    if not req_token or req_token != valid_token:
+        return jsonify({"error": "Token tidak valid"}), 403
+
+    if "file" not in request.files:
+        return jsonify({"error": "File tidak ditemukan"}), 400
+
+    f        = request.files["file"]
+    filepath = f"data/upload_{f.filename}"
+    f.save(filepath)
+
+    from init_db import import_excel
+    result = import_excel(filepath, diimport_oleh="[AUTO-UPLOAD]")
+    try:
+        os.remove(filepath)
+    except:
+        pass
+    return jsonify(result)
+
 @app.route("/api/import", methods=["POST"])
 @admin_required
 def import_excel_route():
@@ -1135,7 +1240,7 @@ def dashboard_marketing():
     role = get_user_role()
     marketing_id = session.get("marketing_id")
 
-    if role in ("admin","leader"):
+    if role in ("admin","leader","petugas"):
         rows = conn.execute("""
             SELECT n.marketing_nama, n.marketing_id,
                 COUNT(*) as total,
@@ -1164,7 +1269,7 @@ def dashboard_marketing():
         """, [bulan, marketing_id]).fetchall()
 
     bulan_num = bulan.replace('-', '')  # e.g. '202606'
-    is_marketing = role not in ("admin", "leader")
+    is_marketing = role not in ("admin", "leader", "petugas")
     mkt_join_filter = "AND n.marketing_id=?" if is_marketing else ""
     mkt_args_bn = [bulan, bulan_num] + ([marketing_id] if is_marketing else [])
     mkt_args_b  = [bulan] + ([marketing_id] if is_marketing else [])
@@ -1185,17 +1290,18 @@ def dashboard_marketing():
     kolek = conn.execute("""
         SELECT t.kolektibilitas, COUNT(*) as total,
             SUM(CASE WHEN (t.status='LUNAS' OR t.total_tagihan < 1) THEN 1 ELSE 0 END) as lunas,
-            SUM(t.total_tagihan) as nominal
+            SUM(t.saldo_pinjaman) as nominal
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=? """ + mkt_join_filter + """
         GROUP BY t.kolektibilitas ORDER BY t.kolektibilitas ASC
     """, mkt_args_b).fetchall()
 
     top_tunggak = conn.execute("""
-        SELECT n.nama, n.no_rekening, n.marketing_nama, t.total_tagihan, t.kolektibilitas
+        SELECT n.nama, n.no_rekening, n.marketing_nama, t.total_tagihan,
+               t.kolektibilitas, t.saldo_pinjaman
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=? AND t.status='BELUM' """ + mkt_join_filter + """
-        ORDER BY t.total_tagihan DESC LIMIT 25
+        ORDER BY t.saldo_pinjaman DESC LIMIT 25
     """, mkt_args_b).fetchall()
 
     npf_row = conn.execute("""
@@ -1254,12 +1360,13 @@ def belum_minggu_ini():
     end_week = start_week + timedelta(days=6)
     rows = conn.execute("""
         SELECT n.nama, n.no_rekening, n.no_hp, n.marketing_nama,
-               n.tanggal_jt, t.total_tagihan, t.kolektibilitas, t.id as tagihan_id
+               n.tanggal_jt, t.total_tagihan, t.kolektibilitas, t.id as tagihan_id,
+               n.is_reschedule
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         WHERE t.bulan=? AND t.status='BELUM'
-        """ + ("" if role == "admin" else "AND n.marketing_id=?") + """
+        """ + ("" if role in ("admin","leader","petugas") else "AND n.marketing_id=?") + """
         ORDER BY t.kolektibilitas DESC, t.total_tagihan DESC
-    """, [bulan] if role == "admin" else [bulan, marketing_id]).fetchall()
+    """, [bulan] if role in ("admin","leader","petugas") else [bulan, marketing_id]).fetchall()
     hasil = []
     for r in rows:
         d = dict(r)
@@ -1576,6 +1683,22 @@ def ensure_blast_log(conn):
             skip INTEGER DEFAULT 0,
             catatan TEXT,
             dibuat_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS blast_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT UNIQUE NOT NULL,
+            tipe TEXT NOT NULL,
+            bulan TEXT NOT NULL,
+            status TEXT DEFAULT 'running',
+            terkirim INTEGER DEFAULT 0,
+            gagal INTEGER DEFAULT 0,
+            total INTEGER DEFAULT 0,
+            dilakukan_oleh TEXT,
+            catatan TEXT,
+            dibuat_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            selesai_at TIMESTAMP
         )
     """)
     conn.commit()

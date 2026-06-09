@@ -289,15 +289,22 @@ async function loadJatuhTempoHariIni(bulan) {
     if (rows.length === 0) return '';
 
     var items = rows.map(function(r) {
+      var isReschedule = r.is_reschedule === 1;
       var hp = r.no_hp ? '✅' : '❌';
-      var aksiBtn = r.no_hp
-        ? '<button class="btn-jt-kirim" onclick="kirimNotifJT(' + r.id + ',this)" title="Kirim WA">📨</button>'
-        : '<button class="btn-jt-kirim btn-jt-hp" onclick="isiHpJT(\'' + r.no_rekening + '\',\'' + r.id + '\')" title="Isi No HP" style="background:#fff3cd;font-size:12px;padding:6px 8px;">📱 Isi HP</button>';
-      return '<div class="jt-item" id="jt-item-' + r.id + '">'
+      var rsBadge = isReschedule
+        ? '<span style="display:inline-block;font-size:9px;background:#ea580c;color:#fff;padding:1px 6px;border-radius:99px;margin-left:5px;font-weight:800;vertical-align:middle;">⚠️ RESCHEDULE</span>'
+        : '';
+      var aksiBtn = isReschedule
+        ? '<span style="font-size:10px;color:#92400e;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:5px 8px;flex-shrink:0;">🔄 Reschedule</span>'
+        : (r.no_hp
+          ? '<button class="btn-jt-kirim" onclick="kirimNotifJT(' + r.id + ',this)" title="Kirim WA">📨</button>'
+        : '<button class="btn-jt-kirim btn-jt-hp" onclick="isiHpJT(\'' + r.no_rekening + '\',\'' + r.id + '\')" title="Isi No HP" style="background:#fff3cd;font-size:12px;padding:6px 8px;">📱 Isi HP</button>');
+      var bgStyle = isReschedule ? 'background:#fff7ed;border-left:3px solid #ea580c;' : '';
+      return '<div class="jt-item" id="jt-item-' + r.id + '" style="' + bgStyle + '">'
         + '<div class="jt-info">'
-        +   '<div class="jt-nama">' + (r.nama || '-') + ' ' + hp + '</div>'
+        +   '<div class="jt-nama">' + (r.nama || '-') + ' ' + hp + rsBadge + '</div>'
         +   '<div class="jt-sub">' + r.no_rekening + ' &middot; ' + rpShort(r.total_tagihan) + '</div>'
-        +   (!r.no_hp ? '<div id="jt-hp-form-' + r.id + '" style="display:none;margin-top:6px;display:none;">'
+        +   (!r.no_hp && !isReschedule ? '<div id="jt-hp-form-' + r.id + '" style="display:none;margin-top:6px;display:none;">'
         +     '<input type="tel" id="jt-hp-input-' + r.id + '" placeholder="08xx / 628xx" '
         +     'style="border:1px solid #ddd;border-radius:6px;padding:5px 8px;font-size:12px;width:140px;font-family:inherit;" />'
         +     '<button onclick="simpanHpJT(\'' + r.no_rekening + '\',\'' + r.id + '\')" '
@@ -338,22 +345,27 @@ async function loadJatuhTempoMarketing(bulan) {
     var items = rows.map(function(r) {
       var tglRaw = String(r.tanggal_jt || '').substr(6,2) || '--';
       var isToday = tglRaw === today;
-      var bgRow   = isToday ? 'background:#fff8e1;' : '';
+      var isReschedule = r.is_reschedule === 1;
+      var bgRow = isReschedule ? 'background:#fff7ed;border-left:3px solid #ea580c;'
+                 : isToday ? 'background:#fff8e1;' : '';
       var todayBadge = isToday ? '<span style="font-size:9px;background:#f39c12;color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;font-weight:700;">HARI INI</span>' : '';
-      var aksiBtn = r.no_hp
-        ? '<button onclick="kirimNotifJT(' + r.id + ',this)" title="Kirim WA" '
-          + 'style="background:var(--primary);color:#fff;border:none;border-radius:8px;'
-          + 'padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0;">📨</button>'
-        : '<button onclick="isiHpJT(\'' + r.no_rekening + '\',\'' + r.id + '\')" title="Isi No HP" '
-          + 'style="background:#fff3cd;border:1px solid #fcd34d;color:#92400e;border-radius:8px;'
-          + 'padding:5px 8px;font-size:11px;cursor:pointer;flex-shrink:0;font-family:inherit;">📱 HP</button>';
+      var rsBadge = isReschedule ? '<span style="font-size:9px;background:#ea580c;color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;font-weight:800;">⚠️ RESCHEDULE</span>' : '';
+      var aksiBtn = isReschedule
+        ? '<span style="font-size:10px;color:#92400e;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:5px 8px;flex-shrink:0;">🔄</span>'
+        : (r.no_hp
+          ? '<button onclick="kirimNotifJT(' + r.id + ',this)" title="Kirim WA" '
+            + 'style="background:var(--primary);color:#fff;border:none;border-radius:8px;'
+            + 'padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0;">📨</button>'
+          : '<button onclick="isiHpJT(\'' + r.no_rekening + '\',\'' + r.id + '\')" title="Isi No HP" '
+            + 'style="background:#fff3cd;border:1px solid #fcd34d;color:#92400e;border-radius:8px;'
+            + 'padding:5px 8px;font-size:11px;cursor:pointer;flex-shrink:0;font-family:inherit;">📱 HP</button>');
       return '<div id="jt-item-' + r.id + '" style="display:flex;align-items:center;gap:8px;'
         + 'padding:8px 12px;border-bottom:1px solid #f0f0f0;' + bgRow + '">'
         + '<div style="font-size:12px;font-weight:800;color:#c0392b;flex-shrink:0;width:26px;text-align:center;">'
         +   tglRaw + '</div>'
         + '<div style="flex:1;min-width:0;">'
         +   '<div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
-        +     (r.nama || '-') + todayBadge + '</div>'
+        +     (r.nama || '-') + todayBadge + rsBadge + '</div>'
         +   '<div style="font-size:10px;color:#999;margin-top:1px;">'
         +     rpShort(r.total_tagihan) + (r.no_hp ? '' : ' · <span style="color:#e74c3c;">no HP</span>')
         +   '</div>'
@@ -899,6 +911,8 @@ async function renderAdmin() {
       '<input type="file" id="fileImport" accept=".xlsx,.xls" style="display:none" onchange="doImport(this)"/>' +
       '<div id="importProgress" class="hidden" style="margin-top:12px;"></div>' +
     '</div>' +
+    '<div class="section-title">📋 Histori Import</div>' +
+    '<div id="histImportCard" class="card" style="padding:0;max-height:340px;overflow-y:auto;">' + logRows + '</div>' +
     '<div class="section-title">Blast Reminder WA</div>' +
 '<div class="card admin-section">' +
   '<p style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Kirim reminder ke nasabah BELUM BAYAR yang punya no HP.</p>' +
@@ -909,8 +923,6 @@ async function renderAdmin() {
   '<p style="font-size:11px;color:var(--gray-400);">📅 Blast Hari Ini = hanya nasabah jatuh tempo tanggal ' + new Date().getDate() + '</p>' +
   '<div id="blastResult" class="hidden" style="margin-top:12px;"></div>' +
 '</div>';
-    '<div class="section-title">Histori Import</div>' +
-'<div class="card">' + logRows + '</div>';
 
 loadUsersAdmin();
 }
@@ -1027,6 +1039,7 @@ async function doImport(input) {
 
   input.value = "";
   toast("✅ Import berhasil!");
+  refreshHistoriImport();
 }
 
 let activeBlastData = null;
@@ -1499,6 +1512,156 @@ function esc(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ── TAMBAHAN FITUR BMT ─────────────────────────────────────────
 // Patch navigate - dipanggil setelah DOM ready
@@ -1550,6 +1713,27 @@ function closeAdminMenu() {
   var ov=document.getElementById('adminMenuOverlay'); if(ov) ov.remove();
 }
 
+async function refreshHistoriImport() {
+  var card = document.getElementById('histImportCard');
+  if (!card) return;
+  var logs = await api('/api/import/log');
+  if (!logs || logs.error) return;
+  if (logs.length === 0) {
+    card.innerHTML = '<div class=empty-state style=padding:24px><p>Belum ada histori import</p></div>';
+    return;
+  }
+  card.innerHTML = logs.map(function(l) {
+    return '<div class=histori-item>'
+      + '<div class=histori-left>'
+      +   '<div class=h-nama>' + bulanLabel(l.bulan) + '</div>'
+      +   '<div class=h-meta>+' + l.nasabah_baru + ' baru · ~' + l.nasabah_update + ' update · ' + l.nasabah_nonaktif + ' nonaktif</div>'
+      +   '<div class=h-meta>' + l.tagihan_baru + ' tagihan baru · ' + fmtTgl(l.waktu) + '</div>'
+      + '</div>'
+      + '<div class=histori-right><div class=h-cara>' + l.diimport_oleh + '</div></div>'
+      + '</div>';
+  }).join('');
+}
+
 function initTambahanNav() {
   const nav = document.querySelector(".bottom-nav");
   ["navMarketing","navMonitor","navNotif","navJadwal","navStatistik","navAdminBtn"].forEach(function(id){
@@ -1572,8 +1756,8 @@ function initTambahanNav() {
     if (histBtn) histBtn.parentNode.removeChild(histBtn);
   }
 
-  // Statistik: admin & leader
-  if (isAdmin || isLeader) {
+  // Statistik: admin, leader & petugas
+  if (isAdmin || isLeader || navRole === "petugas") {
     var bStat = document.createElement("button");
     bStat.className="nav-item"; bStat.id="navStatistik"; bStat.dataset.page="marketing_dashboard";
     bStat.innerHTML='<span class="nav-icon">&#128200;</span>Statistik';
@@ -1726,10 +1910,78 @@ async function renderMarketingDashboard() {
   if (data.error) { main.innerHTML = '<div class="empty-state"><p>' + data.error + '</p></div>'; return; }
   const kolLabel = ["","Lancar","DPK","Kurang Lancar","Diragukan","Macet"];
   const kolColor = ["","#27ae60","#f39c12","#e67e22","#e74c3c","#922b21"];
+  // ── Kolektibilitas: Jumlah view
   const kolHtml = data.kolektibilitas.map(k => {
     const pct = k.total > 0 ? Math.round(k.lunas/k.total*100) : 0;
-    return '<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:4px;"><span style="color:'+kolColor[k.kolektibilitas]+'">'+kolLabel[k.kolektibilitas]+'</span><span>'+k.lunas+'/'+k.total+' · '+pct+'%</span></div><div style="background:var(--gray-200);border-radius:99px;height:8px;overflow:hidden;"><div style="background:'+kolColor[k.kolektibilitas]+';width:'+pct+'%;height:100%;border-radius:99px;"></div></div></div>';
+    const belum = k.total - k.lunas;
+    const belumPct = k.total > 0 ? Math.round(belum/k.total*100) : 0;
+    return '<div style="margin-bottom:12px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;margin-bottom:4px;">'
+      +   '<span style="color:'+kolColor[k.kolektibilitas]+';">'+kolLabel[k.kolektibilitas]+'</span>'
+      +   '<span style="font-size:11px;font-weight:400;color:var(--gray-500);">'
+      +     '<span style="color:var(--green-dark);font-weight:700;">'+k.lunas+'</span>'
+      +     ' lunas · '
+      +     '<span style="color:var(--red-dark);font-weight:700;">'+belum+'</span>'
+      +     ' belum · '+k.total+' total'
+      +   '</span>'
+      + '</div>'
+      + '<div style="background:var(--gray-200);border-radius:99px;height:8px;overflow:hidden;">'
+      +   '<div style="background:'+kolColor[k.kolektibilitas]+';width:'+pct+'%;height:100%;border-radius:99px;"></div>'
+      + '</div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--gray-400);margin-top:2px;">'
+      +   '<span>Lunas '+pct+'%</span><span>Belum '+belumPct+'%</span>'
+      + '</div>'
+      + '</div>';
   }).join("");
+
+  // ── Kolektibilitas: Nominal view
+  const totalNominal = data.kolektibilitas.reduce(function(s,k){ return s+(k.nominal||0); }, 0);
+  const maxNominal = Math.max(...data.kolektibilitas.map(k=>k.nominal||0), 1);
+  const kolNominalHtml = (function(){
+    var sorted = data.kolektibilitas.slice().sort(function(a,b){ return (b.nominal||0)-(a.nominal||0); });
+    return sorted.map(function(k) {
+      var nom = k.nominal || 0;
+      var barW = Math.round((nom / maxNominal) * 100);
+      var pctOfTotal = totalNominal > 0 ? Math.round(nom/totalNominal*100) : 0;
+      return '<div style="margin-bottom:14px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;margin-bottom:5px;">'
+        +   '<span style="color:'+kolColor[k.kolektibilitas]+';">'+kolLabel[k.kolektibilitas]+'</span>'
+        +   '<span style="font-size:12px;font-weight:800;color:'+kolColor[k.kolektibilitas]+'">' + rpShort(nom) + '</span>'
+        + '</div>'
+        + '<div style="background:var(--gray-100);border-radius:6px;height:20px;overflow:hidden;position:relative;">'
+        +   '<div style="background:'+kolColor[k.kolektibilitas]+';opacity:0.85;width:'+barW+'%;height:100%;border-radius:6px;transition:width 0.4s;"></div>'
+        +   '<div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:#555;">'
+        +     k.total + ' nasabah · ' + pctOfTotal + '%'
+        +   '</div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  })();
+
+  // ── Toggle wrapper for kolektibilitas
+  const kolSectionHtml = '<div style="display:flex;gap:8px;margin-bottom:14px;">'
+    + '<button id="kolTabJml" onclick="setKolTab(\'jumlah\')" style="flex:1;padding:7px 0;border:1.5px solid var(--primary);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:var(--primary);color:#fff;">👥 Jumlah</button>'
+    + '<button id="kolTabNom" onclick="setKolTab(\'nominal\')" style="flex:1;padding:7px 0;border:1.5px solid var(--primary);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#fff;color:var(--primary);">💰 Nominal</button>'
+    + '</div>'
+    + '<div id="kolJumlahView">' + kolHtml + '</div>'
+    + '<div id="kolNominalView" style="display:none;">' + kolNominalHtml + '</div>';
+
+  window.setKolTab = function(tab) {
+    var jv = document.getElementById('kolJumlahView');
+    var nv = document.getElementById('kolNominalView');
+    var bj = document.getElementById('kolTabJml');
+    var bn = document.getElementById('kolTabNom');
+    if (!jv || !nv) return;
+    if (tab === 'jumlah') {
+      jv.style.display = ''; nv.style.display = 'none';
+      if (bj) { bj.style.background = 'var(--primary)'; bj.style.color = '#fff'; }
+      if (bn) { bn.style.background = '#fff'; bn.style.color = 'var(--primary)'; }
+    } else {
+      jv.style.display = 'none'; nv.style.display = '';
+      if (bj) { bj.style.background = '#fff'; bj.style.color = 'var(--primary)'; }
+      if (bn) { bn.style.background = 'var(--primary)'; bn.style.color = '#fff'; }
+    }
+  };
   const rankHtml = ranking.map((r,i) => {
     const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)+".";
     const pct = r.pct_kolektibilitas||0;
@@ -1739,34 +1991,73 @@ async function renderMarketingDashboard() {
   }).join("");
   const tunggakHtml = data.top_tunggak.length===0
     ? '<div class="empty-state" style="padding:16px;"><p>Semua nasabah sudah bayar 🎉</p></div>'
-    : data.top_tunggak.map(t=>'<div class="rekap-row" onclick="bukaRiwayat(\''+t.no_rekening+'\')" style="cursor:pointer;"><div><div class="rekap-name">'+t.nama+'</div><div class="rekap-count">'+t.no_rekening+' · '+(t.marketing_nama||"-")+'</div></div><div style="text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--red-dark);">'+rpShort(t.total_tagihan)+'</div><div style="font-size:10px;color:var(--gray-400);">Kol '+t.kolektibilitas+'</div></div></div>').join("");
-  const maxN = Math.max(...data.tren_harian.map(t=>t.total_nominal||0),1);
-  const trenHtml = data.tren_harian.length===0
+    : data.top_tunggak.map(t=>{
+        const expo = (t.kolektibilitas >= 2 && t.saldo_pinjaman) ? t.saldo_pinjaman : t.total_tagihan;
+        const expoLabel = (t.kolektibilitas >= 2 && t.saldo_pinjaman) ? 'Saldo' : 'Tagihan';
+        return '<div class="rekap-row" onclick="bukaRiwayat(\''+t.no_rekening+'\')" style="cursor:pointer;">'
+          + '<div><div class="rekap-name">'+t.nama+'</div>'
+          + '<div class="rekap-count">'+t.no_rekening+' · '+(t.marketing_nama||"-")+'</div></div>'
+          + '<div style="text-align:right;">'
+          + '<div style="font-size:14px;font-weight:800;color:var(--red-dark);">'+rpShort(expo)+'</div>'
+          + '<div style="font-size:10px;color:var(--gray-400);">'+expoLabel+' · Kol '+t.kolektibilitas+'</div>'
+          + '</div></div>';
+      }).join("");
+  const tren_data = Array.isArray(data.tren_harian) ? data.tren_harian : [];
+  const maxN = Math.max(...tren_data.map(t=>t.total_nominal||0),1);
+  const trenHtml = tren_data.length===0
     ? '<div style="text-align:center;color:var(--gray-400);padding:16px;font-size:13px;">Belum ada transaksi bulan ini</div>'
-    : '<div style="display:flex;align-items:flex-end;gap:4px;height:80px;padding:8px 0;">'+data.tren_harian.map(t=>{const p=Math.round((t.total_nominal/maxN)*100);return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;background:var(--primary);border-radius:3px 3px 0 0;height:'+p+'%;min-height:3px;"></div><div style="font-size:8px;color:var(--gray-400);">'+t.hari+'</div></div>';}).join("")+'</div>';
-  // Task 5: Hitung NPL (Kol 2-5)
+    : (function(){
+        var bars = tren_data.map(function(t){
+          var bh = Math.max(Math.round((t.total_nominal / maxN) * 56), 3);
+          var nm = t.total_nominal >= 1e6
+            ? (t.total_nominal/1e6).toFixed(1) + 'jt'
+            : Math.round(t.total_nominal/1e3) + 'rb';
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;">'
+            + '<div style="font-size:7px;color:var(--gray-400);margin-bottom:1px;">' + nm + '</div>'
+            + '<div style="width:100%;background:var(--primary);border-radius:3px 3px 0 0;height:' + bh + 'px;"></div>'
+            + '<div style="font-size:8px;color:var(--gray-500);margin-top:2px;">' + t.hari + '</div>'
+            + '</div>';
+        });
+        return '<div style="display:flex;align-items:flex-end;gap:3px;height:80px;padding:4px 0 0;">'
+          + bars.join('') + '</div>';
+      })();
+  // NPL = Kol 2-5 berdasarkan saldo_pinjaman (sisa pokok pembiayaan)
+  const nplSaldo = data.kolektibilitas.filter(function(k){ return k.kolektibilitas >= 2; }).reduce(function(s,k){ return s+(k.nominal||0); }, 0);
+  const totalSaldo = data.kolektibilitas.reduce(function(s,k){ return s+(k.nominal||0); }, 0);
+  const nplPct = totalSaldo > 0 ? Math.round(nplSaldo / totalSaldo * 1000) / 10 : 0;
   const nplCount = data.kolektibilitas.filter(function(k){ return k.kolektibilitas >= 2; }).reduce(function(s,k){ return s+k.total; }, 0);
   const totalKolCount = data.kolektibilitas.reduce(function(s,k){ return s+k.total; }, 0);
-  const nplPct = totalKolCount > 0 ? Math.round(nplCount / totalKolCount * 1000) / 10 : 0;
   const nplColor = nplPct < 5 ? '#166534' : nplPct < 10 ? '#92400e' : '#991b1b';
   const nplBg    = nplPct < 5 ? '#f0fdf4' : nplPct < 10 ? '#fffbeb' : '#fff1f2';
   const nplBorder= nplPct < 5 ? '#bbf7d0' : nplPct < 10 ? '#fde68a' : '#fecdd3';
   const nplIcon  = nplPct < 5 ? '✅' : nplPct < 10 ? '⚠️' : '🔴';
   const nplLabel = nplPct < 5 ? 'Aman' : nplPct < 10 ? 'Perlu Perhatian' : 'Kritis';
-  const nplHtml  = '<div style="background:'+nplBg+';border:1.5px solid '+nplBorder+';border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">'
-    + '<div><div style="font-size:12px;color:'+nplColor+';font-weight:700;">NPL (Non-Performing Loan) — Kol 2-5</div>'
-    + '<div style="font-size:11px;color:#888;margin-top:2px;">'+nplCount+' dari '+totalKolCount+' nasabah · Batas aman: <b>5%</b></div></div>'
-    + '<div style="text-align:right;">'
-    + '<div style="font-size:22px;font-weight:900;color:'+nplColor+';">'+nplPct+'%</div>'
-    + '<div style="font-size:11px;font-weight:700;color:'+nplColor+';">'+nplIcon+' '+nplLabel+'</div>'
-    + '</div></div>';
+  const nplHtml  = '<div style="background:'+nplBg+';border:1.5px solid '+nplBorder+';border-radius:12px;padding:14px 16px;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+    +   '<div>'
+    +     '<div style="font-size:12px;color:'+nplColor+';font-weight:700;">NPL — Saldo Kol 2–5</div>'
+    +     '<div style="font-size:11px;color:#888;margin-top:2px;">'+nplCount+' dari '+totalKolCount+' nasabah · Batas aman: <b>5%</b></div>'
+    +   '</div>'
+    +   '<div style="text-align:right;">'
+    +     '<div style="font-size:22px;font-weight:900;color:'+nplColor+';">'+nplPct+'%</div>'
+    +     '<div style="font-size:11px;font-weight:700;color:'+nplColor+';">'+nplIcon+' '+nplLabel+'</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div style="background:var(--gray-200);border-radius:99px;height:6px;overflow:hidden;">'
+    +   '<div style="background:'+nplColor+';width:'+Math.min(nplPct,100)+'%;height:100%;border-radius:99px;transition:width 0.4s;"></div>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:10px;color:#888;margin-top:4px;">'
+    +   '<span>Saldo NPL: <b style="color:'+nplColor+';">'+rpShort(nplSaldo)+'</b></span>'
+    +   '<span>Total saldo: '+rpShort(totalSaldo)+'</span>'
+    + '</div>'
+    + '</div>';
 
   main.innerHTML = bulanPickerHtml(state.bulan)+
     '<div class="section-title">📉 Rasio NPL</div><div class="card" style="padding:14px;">'+nplHtml+'</div>'+
-    '<div class="section-title">📊 Kolektibilitas</div><div class="card" style="padding:16px;">'+kolHtml+'</div>'+
+    '<div class="section-title">📊 Kolektibilitas</div><div class="card" style="padding:16px;">'+kolSectionHtml+'</div>'+
     '<div class="section-title">📈 Tren Pembayaran Harian</div><div class="card" style="padding:16px;">'+trenHtml+'</div>'+
     '<div class="section-title">🏆 Ranking Marketing '+bulanLabel(state.bulan)+'</div><div class="card">'+(rankHtml||'<div class="empty-state" style="padding:16px;"><p>Belum ada data</p></div>')+'</div>'+
-    '<div class="section-title">🔴 Top 5 Tunggakan Terbesar</div><div class="card">'+tunggakHtml+'</div>'+
+    '<div class="section-title">🔴 Top 25 Tunggakan Terbesar</div><div class="card" style="padding:0;"><div style="max-height:420px;overflow-y:auto;">'+tunggakHtml+'</div></div>'+
     '<div class="section-title">📅 Belum Bayar Minggu Ini</div><div id="belumMingguIniBox"><div class="loading"><div class="spinner"></div> Memuat...</div></div>'
     + '<div id="trenTahunanBox" style="margin-top:4px;"><div class="loading"><div class="spinner"></div> Memuat grafik...</div></div>';
   loadBelumMingguIni();
@@ -1777,7 +2068,17 @@ async function loadBelumMingguIni() {
   if (!box) return;
   const res = await api("/api/dashboard/belum-minggu-ini?bulan="+state.bulan);
   if (!res.data||res.data.length===0) { box.innerHTML='<div class="card"><div class="empty-state" style="padding:16px;"><p>✅ Tidak ada jatuh tempo minggu ini</p></div></div>'; return; }
-  box.innerHTML='<div class="card">'+res.data.map(t=>'<div class="rekap-row"><div><div class="rekap-name">'+t.nama+'</div><div class="rekap-count">JT tgl '+t.tgl_jt_num+' · '+(t.marketing_nama||"-")+'</div></div><div style="text-align:right;"><div style="font-size:13px;font-weight:800;color:var(--red-dark);">'+rpShort(t.total_tagihan)+'</div></div></div>').join("")+'</div>';
+  box.innerHTML='<div class="card">'+res.data.map(t=>{
+    var isRs = t.is_reschedule === 1;
+    var rsBadge = isRs ? '<span style="display:inline-block;font-size:9px;background:#ea580c;color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;font-weight:800;">&#9888; RS</span>' : '';
+    var bgRs = isRs ? 'background:#fff7ed;border-left:3px solid #ea580c;padding-left:9px;' : '';
+    return '<div class="rekap-row" style="'+bgRs+'">'
+      + '<div><div class="rekap-name">'+t.nama+rsBadge+'</div>'
+      + '<div class="rekap-count">JT tgl '+t.tgl_jt_num+' · '+(t.marketing_nama||"-")+'</div></div>'
+      + '<div style="text-align:right;"><div style="font-size:13px;font-weight:800;color:var(--red-dark);">'+rpShort(t.total_tagihan)+'</div>'
+      + (isRs ? '<div style="font-size:9px;color:#92400e;font-weight:700;">Reschedule</div>' : '')
+      + '</div></div>';
+  }).join("")+'</div>';
 }
 async function bukaRiwayat(no_rekening) {
   state.activeRiwayatRek = no_rekening;
@@ -2434,27 +2735,56 @@ async function renderRekapHarianIsi(tgl){
         +'</div></div>';
     }).join('');
   } else {
+    const listRows = rows.slice(0,25);
+    const moreCount = rows.length - listRows.length;
+    html+='<div style="font-size:11px;color:var(--gray-400);margin-bottom:6px;">'
+      +(rows.length > 25 ? 'Menampilkan 25 dari '+rows.length+' kunjungan' : 'Total '+rows.length+' kunjungan')
+      +'</div>';
     html+='<div class="card" style="padding:0;overflow:hidden;">'
-      +rows.map((r,i)=>{
+      +listRows.map((r,i)=>{
         const kol=r.kolektibilitas||0;
         const tung=(r.tunggakan_pokok||0)+(r.tunggakan_margin||0);
         const fu=r.foto_path?getFotoUrl(r.foto_path):null;
+        const statusBadge = r.status==='LUNAS'
+          ? '<span style="background:#eafaf1;color:#27ae60;font-weight:800;font-size:10px;padding:1px 7px;border-radius:99px;">✅ LUNAS</span>'
+          : '<span style="background:#fdedec;color:#e74c3c;font-weight:700;font-size:10px;padding:1px 7px;border-radius:99px;">BELUM</span>';
         return '<div style="padding:10px 14px;'+(i?'border-top:1px solid var(--gray-100);':'')+';display:flex;gap:10px;align-items:center;">'
           +(fu?'<a href="'+fu+'" target="_blank"><img src="'+fu+'" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex-shrink:0;" loading="lazy" onerror="this.style.display=\'none\'"></a>'
              :'<div style="width:48px;height:48px;background:var(--gray-100);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">📷</div>')
           +'<div style="flex:1;min-width:0;">'
           +'<div style="display:flex;justify-content:space-between;align-items:center;">'
-          +'<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.nama+'</div>'
-          +(kol?'<span style="background:'+KOL_BG[kol]+';color:'+KOL_COLOR[kol]+';font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;margin-left:4px;white-space:nowrap;">'+KOL_LABEL[kol]+'</span>':'')
-          +'<div style="font-size:11px;color:var(--gray-500);margin-top:2px;">'+(r.dicatat_oleh||'-')+' · '+(r.total_tagihan?rpShort(r.total_tagihan):'-')+(tung?' · tung '+rpShort(tung):'')+(r.status==='LUNAS'?' · <span style="background:#eafaf1;color:#27ae60;font-weight:800;padding:1px 7px;border-radius:99px;">✅ LUNAS</span>':' · <span style="background:#fdedec;color:#e74c3c;font-weight:700;padding:1px 7px;border-radius:99px;">BELUM</span>')+'</div>'
+            +'<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">'+r.nama+'</div>'
+            +(kol?'<span style="background:'+KOL_BG[kol]+';color:'+KOL_COLOR[kol]+';font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;margin-left:4px;white-space:nowrap;">'+KOL_LABEL[kol]+'</span>':'')
+          +'</div>'
+          +'<div style="font-size:11px;color:var(--gray-500);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+            +'<span>'+(r.dicatat_oleh||'-')+'</span>'
+            +(r.total_tagihan?'<span>·</span><span>'+rpShort(r.total_tagihan)+'</span>':'')
+            +(tung?'<span>·</span><span style="color:var(--yellow-dark);">tung '+rpShort(tung)+'</span>':'')
+            +'<span>·</span>'+statusBadge
+          +'</div>'
           +(r.catatan?'<div style="font-size:11px;color:var(--gray-600);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.catatan)+'</div>':'')
           +'</div></div>';
-      }).join('')+'</div>';
+      }).join('')
+      +(moreCount>0?'<div style="padding:10px 14px;border-top:1px solid var(--gray-100);font-size:11px;color:var(--gray-400);text-align:center;">... dan '+moreCount+' kunjungan lainnya</div>':'')
+      +'</div>';
   }
   box.innerHTML=html;
 }
 
 // ── INIT ──────────────────────────────────────────────────────
+
+// Fix 5: Override loadJatuhTempoHariIni — make btn-jt-kirim visible
+(function() {
+  var _origLJTH = window.loadJatuhTempoHariIni;
+  if (!_origLJTH) return;
+  window.loadJatuhTempoHariIni = async function(bulan) {
+    var html = await _origLJTH.call(this, bulan);
+    if (!html) return html;
+    // Ganti tombol btn-jt-kirim jadi warna hijau agar terlihat
+    return html.replace(/class="btn-jt-kirim"([^>]*title="Kirim WA")/g,
+      'class="btn-jt-kirim" style="background:var(--primary);color:#fff;font-size:14px;" ' + "$1");
+  };
+})();
 
 // ── TASK 7: Batasi kirim WA hanya untuk admin ─────────────────────────────
 (function() {
@@ -2490,14 +2820,44 @@ async function renderRekapHarianIsi(tgl){
     };
   }
 
-  // Safety net: block kirimNotifJT for non-admin
+  // Safety net + WA sent tracking for kirimNotifJT
+  if (!window._waSentJT) window._waSentJT = new Set();
   var _origKNJT = window.kirimNotifJT;
   window.kirimNotifJT = async function(id, btn) {
     if (!state.user || state.user.role !== 'admin') {
       if (typeof toast === 'function') toast('⛔ Hanya admin yang dapat mengirim notif WA');
       return;
     }
-    if (_origKNJT) return _origKNJT.call(this, id, btn);
+    // Cek reschedule dari style border item
+    var jtItem = document.getElementById('jt-item-' + id);
+    if (jtItem && (jtItem.style.borderLeft || '').indexOf('ea580c') >= 0) {
+      if (typeof toast === 'function') toast('⚠️ Nasabah reschedule — WA tidak dikirim. Hubungi langsung.');
+      return;
+    }
+    if (_origKNJT) {
+      await _origKNJT.call(this, id, btn);
+      // Tambah badge setelah kirim — cek sukses dengan setTimeout agar DOM update dulu
+      setTimeout(function() {
+        // Sukses jika btn disabled (tidak bisa klik ulang) dan bukan error
+        var txt = btn ? (btn.textContent || btn.innerText || '') : '';
+        var isError = txt.indexOf('❌') >= 0;  // ❌
+        if (!isError) {
+          window._waSentJT.add(String(id));
+          var item = document.getElementById('jt-item-' + id);
+          if (item && !item.querySelector('.wa-sent-badge')) {
+            var namaEl = item.querySelector('.jt-nama');
+            if (namaEl) {
+              var badge = document.createElement('span');
+              badge.className = 'wa-sent-badge';
+              badge.style.cssText = 'display:inline-block;font-size:10px;background:#dcfce7;color:#166534;'
+                + 'border:1px solid #86efac;padding:2px 8px;border-radius:99px;margin-left:6px;font-weight:600;vertical-align:middle;';
+              badge.textContent = '📨 Terkirim';
+              namaEl.appendChild(badge);
+            }
+          }
+        }
+      }, 200);
+    }
   };
 
   // Safety net: block blastNotifJT for non-admin
@@ -2529,17 +2889,24 @@ async function loadBlastHistori(bulan) {
     const html = rows.map(function(r) {
       const tgl = r.dibuat_at ? r.dibuat_at.replace('T',' ').substring(0,16) : '-';
       const label = tipeLabel[r.tipe] || r.tipe;
-      const cat = r.catatan ? ' · ' + r.catatan : '';
       const bulanBadge = r.bulan ? '<span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:99px;margin-left:4px;">' + r.bulan + '</span>' : '';
-      return '<div style="padding:10px 14px;border-bottom:1px solid var(--gray-100);display:flex;align-items:flex-start;gap:10px;">'
+      // Parse catatan: 'Blast Hari Ini | nama1, nama2, ...'
+      var catParts = r.catatan ? r.catatan.split(' | ') : [];
+      var catTipe = catParts[0] || '';
+      var catNama = catParts[1] || '';
+      var catTipeBadge = catTipe ? '<span style="font-size:10px;background:#f0fdf4;color:#166534;padding:1px 6px;border-radius:99px;margin-left:4px;">' + catTipe + '</span>' : '';
+      var catNamaHtml = catNama ? '<div style="font-size:10px;color:var(--gray-400);margin-top:3px;line-height:1.4;">👥 ' + catNama + '</div>' : '';
+      return '<div style="padding:10px 14px;border-bottom:1px solid var(--gray-100);">'
+        + '<div style="display:flex;align-items:flex-start;gap:8px;">'
         + '<div style="flex:1;min-width:0;">'
-        +   '<div style="font-size:12px;font-weight:700;">' + label + bulanBadge + '</div>'
-        +   '<div style="font-size:11px;color:var(--gray-500);margin-top:2px;">📌 ' + cat + '</div>'
-        +   '<div style="font-size:11px;color:var(--gray-500);margin-top:1px;">👤 ' + (r.dilakukan_oleh||'-') + ' &nbsp;·&nbsp; 🕐 ' + tgl + '</div>'
+        +   '<div style="font-size:12px;font-weight:700;">' + label + bulanBadge + catTipeBadge + '</div>'
+        +   catNamaHtml
+        +   '<div style="font-size:11px;color:var(--gray-500);margin-top:3px;">👤 ' + (r.dilakukan_oleh||'-') + ' &nbsp;·&nbsp; 🕐 ' + tgl + '</div>'
         + '</div>'
-        + '<div style="text-align:right;flex-shrink:0;padding-top:2px;">'
-        +   '<span style="color:var(--green-dark);font-weight:700;font-size:13px;">✅ ' + (r.terkirim||0) + '</span>'
-        +   (r.gagal > 0 ? ' <span style="color:var(--red-dark);font-weight:700;font-size:13px;">❌ ' + r.gagal + '</span>' : '')
+        + '<div style="text-align:right;flex-shrink:0;">'
+        +   '<div style="font-size:13px;font-weight:700;color:var(--green-dark);">✅ ' + (r.terkirim||0) + '</div>'
+        +   (r.gagal > 0 ? '<div style="font-size:12px;font-weight:700;color:var(--red-dark);">❌ ' + r.gagal + '</div>' : '')
+        + '</div>'
         + '</div>'
         + '</div>';
     }).join('');
@@ -2603,12 +2970,85 @@ function injectBlastHistoriUI() {
   };
 })();
 
-// Override executeBlastRequest — refresh histori setelah blast selesai
+// Override executeBlastRequest — background blast dengan live polling progress
 (function() {
-  var _origExecBlast = window.executeBlastRequest;
   window.executeBlastRequest = async function(updates) {
-    if (_origExecBlast) await _origExecBlast.call(this, updates);
-    setTimeout(function() { loadBlastHistori(state.bulan); }, 600);
+    const resultEl = document.getElementById('blastResult');
+    if (!resultEl) return;
+
+    resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> Memulai blast...</div>';
+    resultEl.classList.remove('hidden');
+
+    const res = await api('/api/reminder/execute_blast', 'POST', {
+      bulan: state.bulan,
+      hanya_hari_ini: (typeof activeBlastData !== 'undefined' && activeBlastData) ? activeBlastData.hanya_hari_ini : false,
+      updates: updates
+    });
+
+    if (!res || res.error) {
+      resultEl.innerHTML = '<div class="error-msg">❌ ' + (res ? res.error : 'Koneksi gagal') + '</div>';
+      return;
+    }
+
+    // Background mode: polling progress
+    if (res.background && res.task_id) {
+      var taskId = res.task_id;
+      var total = res.total || 0;
+      var pollInterval;
+
+      function updateBlastProgress(terkirim, gagal, tot, status) {
+        var pct = tot > 0 ? Math.round(terkirim / tot * 100) : 0;
+        var barColor = status === 'done' ? 'var(--green-dark)' : '#3b82f6';
+        var statusLabel = status === 'done'
+          ? '<span style="color:var(--green-dark);font-weight:700;">✅ Selesai</span>'
+          : status === 'error'
+            ? '<span style="color:var(--red-dark);">❌ Error</span>'
+            : '<span style="color:#3b82f6;">⏳ Mengirim...</span>';
+
+        resultEl.innerHTML =
+          '<div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+          + '<span style="font-weight:700;">' + statusLabel + '</span>'
+          + '<span style="font-size:12px;color:var(--gray-500);">' + terkirim + '/' + tot + '</span>'
+          + '</div>'
+          + '<div style="background:#e5e7eb;border-radius:99px;height:8px;overflow:hidden;margin-bottom:8px;">'
+          + '<div style="background:' + barColor + ';height:100%;border-radius:99px;transition:width 0.4s;width:' + pct + '%;"></div>'
+          + '</div>'
+          + '<div style="font-size:12px;display:flex;gap:12px;">'
+          + '<span style="color:var(--green-dark);">✅ Terkirim: <strong>' + terkirim + '</strong></span>'
+          + (gagal > 0 ? ' <span style="color:var(--red-dark);">❌ Gagal: <strong>' + gagal + '</strong></span>' : '')
+          + '</div>'
+          + '</div>';
+      }
+
+      updateBlastProgress(0, 0, total, 'running');
+
+      pollInterval = setInterval(async function() {
+        try {
+          var task = await api('/api/blast/task/' + taskId);
+          if (!task || task.error) return;
+          updateBlastProgress(task.terkirim || 0, task.gagal || 0, task.total || total, task.status);
+          if (task.status === 'done' || task.status === 'error') {
+            clearInterval(pollInterval);
+            if (task.status === 'done') {
+              toast('📲 ' + (task.terkirim || 0) + ' WA terkirim!');
+            } else {
+              toast('❌ Blast error: ' + (task.catatan || ''));
+            }
+            setTimeout(function() { loadBlastHistori(state.bulan); }, 800);
+          }
+        } catch(e) { /* ignore poll error */ }
+      }, 2000);
+
+    } else {
+      // Fallback: response langsung (non-background)
+      resultEl.innerHTML =
+        '<div style="background:var(--green-pale);border-radius:var(--radius-sm);padding:14px;font-size:13px;">'
+        + '✅ Blast Selesai<br>Terkirim: <strong>' + (res.terkirim||0) + '</strong> · Gagal: <strong>' + (res.gagal||0) + '</strong>'
+        + '</div>';
+      toast('📲 ' + (res.terkirim||0) + ' WA terkirim!');
+      setTimeout(function() { loadBlastHistori(state.bulan); }, 600);
+    }
   };
 })();
 
