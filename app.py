@@ -504,6 +504,11 @@ def list_tagihan():
     if kolek:
         where.append("t.kolektibilitas=?")
         params.append(int(kolek))
+    reschedule = request.args.get("reschedule", "")
+    if reschedule == "1":
+        where.append("n.is_reschedule=1")
+    elif reschedule == "0":
+        where.append("(n.is_reschedule=0 OR n.is_reschedule IS NULL)")
     if search:
         where.append("(n.nama LIKE ? OR n.no_rekening LIKE ?)")
         params += [f"%{search}%", f"%{search}%"]

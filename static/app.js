@@ -11,6 +11,7 @@ const state = {
   tagihan: [],
   filterStatus: "",
   filterKolek: "",
+  filterReschedule: "",
   searchQ: "",
   activeBayarId: null,
   activeHpRek: null,
@@ -505,6 +506,7 @@ async function renderTagihan() {
         '<div id="bulanBox">' + bulanPickerHtml(state.bulan) + '</div>' +
         '<div class="filter-bar" id="filterStatusBox"></div>' +
         '<div class="filter-bar" id="filterKolekBox"></div>' +
+        '<div class="filter-bar" id="filterRescheduleBox"></div>' +
         '<input class="search-bar" type="search" placeholder="🔍 Cari nama / no rekening..." id="searchInput" oninput="setSearch(this.value)"/>' +
         '<div class="section-title" id="tagihanCount">Memuat...</div>' +
         '<div id="tagihanList"><div class="loading"><div class="spinner"></div> Memuat...</div></div>' +
@@ -528,6 +530,7 @@ async function renderTagihan() {
     let url = "/api/tagihan?bulan=" + state.bulan + "&limit=50&offset=0";
     if (state.filterStatus) url += "&status=" + state.filterStatus;
     if (state.filterKolek)  url += "&kolek=" + state.filterKolek;
+    if (state.filterReschedule !== "") url += "&reschedule=" + state.filterReschedule;
     if (state.searchQ)      url += "&q=" + encodeURIComponent(state.searchQ);
     res = await api(url);
   }
@@ -551,6 +554,12 @@ const filterStatus = ["","BELUM","LUNAS"].map((s) => {
     return '<button class="filter-chip ' + (state.filterKolek === k ? "active" : "") + '" onclick="setFilterKolek(\'' + k + '\')">' + label + '</button>';
   }).join("");
 
+  const filterReschedule = [["","Semua"],["1","🔄 Reschedule"],["0","📋 Normal"]].map(([k, label]) => {
+    const isActive = state.filterReschedule === k;
+    const extraStyle = !isActive && k === "1" ? "background:#fff7ed;color:#ea580c;border-color:#f59e0b;" : "";
+    return '<button class="filter-chip ' + (isActive ? "active" : "") + '" style="' + extraStyle + '" onclick="setFilterReschedule(\'' + k + '\')">' + label + '</button>';
+  }).join("");
+
   const sisaData = state.filterStatus !== "JT" ? (state.tagihanTotal - state.tagihanOffset) : 0;
   const loadMoreHtml = sisaData > 0
     ? '<button class="filter-chip" onclick="loadMoreTagihan()">⬇️ Load lebih (' + sisaData + ' lagi)</button>'
@@ -559,6 +568,7 @@ const filterStatus = ["","BELUM","LUNAS"].map((s) => {
   document.getElementById("bulanBox").innerHTML = bulanPickerHtml(state.bulan);
   document.getElementById("filterStatusBox").innerHTML = filterStatus;
   document.getElementById("filterKolekBox").innerHTML = filterKolek;
+  document.getElementById("filterRescheduleBox").innerHTML = filterReschedule;
   document.getElementById("tagihanCount").textContent = state.filterStatus === "JT"
     ? state.tagihanTotal + ' nasabah jatuh tempo s/d hari ini (belum bayar)'
     : state.tagihanTotal + ' tagihan · tampil ' + state.tagihan.length;
@@ -578,6 +588,7 @@ async function loadMoreTagihan() {
   let url = "/api/tagihan?bulan=" + state.bulan + "&limit=50&offset=" + state.tagihanOffset;
   if (state.filterStatus) url += "&status=" + state.filterStatus;
   if (state.filterKolek)  url += "&kolek=" + state.filterKolek;
+  if (state.filterReschedule !== "") url += "&reschedule=" + state.filterReschedule;
   if (state.searchQ)      url += "&q=" + encodeURIComponent(state.searchQ);
 
   const res = await api(url);
@@ -617,11 +628,13 @@ function renderTagihanCard(t) {
     ? '<button class="btn-sm outline" style="color:var(--green-dark);border-color:var(--green-mid);" disabled>' + (isLunas ? "✅ Lunas" : "✅ Sudah Bayar") + '</button>'
     : canBayar ? '<button class="btn-sm green" onclick="openModalBayar(' + t.id + ', event)">💰 Bayar</button>' : '';
 
-  const isReschedule = t.is_reschedule === 1 ? '<span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:10px; padding:2px 4px; margin-right:4px;">🔄 Reschedule</span>' : '';
+  const isReschedule = t.is_reschedule === 1;
+  const rsBadge = isReschedule ? '<span style="display:inline-block;font-size:10px;background:#ea580c;color:#fff;padding:1px 7px;border-radius:99px;margin-right:5px;font-weight:800;">⚠️ RESCHEDULE</span>' : '';
+  const rsCardStyle = isReschedule ? ' style="border-left:4px solid #ea580c;background:#fff7ed;"' : '';
 
-  return '<div class="tagihan-card ' + (isLunas || isSudahBayar ? "lunas" : "belum") + '">' +
+  return '<div class="tagihan-card ' + (isLunas || isSudahBayar ? "lunas" : "belum") + '"' + rsCardStyle + '>' +
     '<div class="tagihan-header">' +
-      '<div><div class="tagihan-nama">' + isReschedule + t.nama + '</div>' +
+      '<div><div class="tagihan-nama">' + rsBadge + t.nama + '</div>' +
       '<div class="tagihan-rek">' + t.no_rekening + ' · ' + (t.marketing_nama || "-") + '</div>' +
       (t.alamat ? '<div style="font-size:10px;color:var(--gray-500);margin-top:2px;">📍 ' + t.alamat + '</div>' : '') +
       '</div>' +
@@ -648,6 +661,11 @@ function setFilter(status) {
 
 function setFilterKolek(k) {
   state.filterKolek = k;
+  state.filterReschedule = "";
+  renderTagihan();
+}
+function setFilterReschedule(k) {
+  state.filterReschedule = k;
   renderTagihan();
 }
 
@@ -1381,6 +1399,16 @@ async function submitReschedule(no_rekening, is_reschedule) {
     closeModalReschedule();
     renderTagihan();
   }
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 // ── XSS Protection ──────────────────────────────────────────────────────
 function esc(s) {
