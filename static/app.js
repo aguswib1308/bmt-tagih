@@ -1489,6 +1489,16 @@ function esc(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ── TAMBAHAN FITUR BMT ─────────────────────────────────────────
 // Patch navigate - dipanggil setelah DOM ready
@@ -2510,28 +2520,26 @@ async function loadBlastHistori(bulan) {
   box.innerHTML = '<div style="text-align:center;padding:12px;color:var(--gray-400);font-size:12px;">⏳ Memuat histori...</div>';
   try {
     const b = bulan || state.bulan;
-    const rows = await api('/api/blast/log?bulan=' + b + '&limit=10');
+    const rows = await api('/api/blast/log?limit=15');
     if (!rows || rows.error || rows.length === 0) {
-      box.innerHTML = '<div style="text-align:center;padding:16px;color:var(--gray-400);font-size:12px;">Belum ada histori blast untuk bulan ini</div>';
+      box.innerHTML = '<div style="text-align:center;padding:16px;color:var(--gray-400);font-size:12px;">Belum ada histori blast</div>';
       return;
     }
-    const tipeLabel = {
-      'execute_blast': '📨 Blast Tagihan',
-      'blast_jt': '🔔 Blast JT Hari Ini',
-    };
+    const tipeLabel = { 'execute_blast': '📨 Blast Tagihan', 'blast_jt': '🔔 Blast JT Hari Ini' };
     const html = rows.map(function(r) {
-      const tgl = r.dibuat_at ? r.dibuat_at.replace('T', ' ').substring(0, 16) : '-';
+      const tgl = r.dibuat_at ? r.dibuat_at.replace('T',' ').substring(0,16) : '-';
       const label = tipeLabel[r.tipe] || r.tipe;
       const cat = r.catatan ? ' · ' + r.catatan : '';
+      const bulanBadge = r.bulan ? '<span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:99px;margin-left:4px;">' + r.bulan + '</span>' : '';
       return '<div style="padding:10px 14px;border-bottom:1px solid var(--gray-100);display:flex;align-items:flex-start;gap:10px;">'
         + '<div style="flex:1;min-width:0;">'
-        +   '<div style="font-size:12px;font-weight:700;">' + label + cat + '</div>'
-        +   '<div style="font-size:11px;color:var(--gray-500);margin-top:2px;">👤 ' + (r.dilakukan_oleh || '-') + ' &nbsp;·&nbsp; 🕐 ' + tgl + '</div>'
+        +   '<div style="font-size:12px;font-weight:700;">' + label + bulanBadge + '</div>'
+        +   '<div style="font-size:11px;color:var(--gray-500);margin-top:2px;">📌 ' + cat + '</div>'
+        +   '<div style="font-size:11px;color:var(--gray-500);margin-top:1px;">👤 ' + (r.dilakukan_oleh||'-') + ' &nbsp;·&nbsp; 🕐 ' + tgl + '</div>'
         + '</div>'
-        + '<div style="text-align:right;flex-shrink:0;">'
-        +   '<div style="font-size:12px;"><span style="color:var(--green-dark);font-weight:700;">✅ ' + (r.terkirim || 0) + '</span>'
-        +   (r.gagal > 0 ? ' <span style="color:var(--red-dark);font-weight:700;">❌ ' + r.gagal + '</span>' : '')
-        +   '</div>'
+        + '<div style="text-align:right;flex-shrink:0;padding-top:2px;">'
+        +   '<span style="color:var(--green-dark);font-weight:700;font-size:13px;">✅ ' + (r.terkirim||0) + '</span>'
+        +   (r.gagal > 0 ? ' <span style="color:var(--red-dark);font-weight:700;font-size:13px;">❌ ' + r.gagal + '</span>' : '')
         + '</div>'
         + '</div>';
     }).join('');
@@ -2542,62 +2550,65 @@ async function loadBlastHistori(bulan) {
 }
 
 function injectBlastHistoriUI() {
-  // Inject blast history section after blastResult div
-  const blastResult = document.getElementById('blastResult');
-  if (!blastResult || document.getElementById('blastHistoriSection')) return;
+  if (document.getElementById('blastHistoriSection')) return;
+  const main = document.getElementById('mainContent');
+  if (!main) return;
   const sec = document.createElement('div');
   sec.id = 'blastHistoriSection';
-  sec.style.marginTop = '16px';
-  sec.innerHTML = ''
-    + '<div class="section-title" style="margin-top:0;">📋 Histori Blast WA</div>'
+  sec.innerHTML =
+    '<div class="section-title">📋 Histori Blast WA</div>'
     + '<div class="card" style="padding:0;overflow:hidden;" id="blastHistoriBox">'
-    +   '<div style="text-align:center;padding:16px;color:var(--gray-400);font-size:12px;">⏳ Memuat...</div>'
+    + '<div style="text-align:center;padding:16px;color:var(--gray-400);font-size:12px;">⏳ Memuat...</div>'
     + '</div>';
-  blastResult.parentNode.insertBefore(sec, blastResult.nextSibling);
+  // Sisipkan tepat setelah card Blast Reminder (setelah blastResult.parentNode)
+  const blastResult = document.getElementById('blastResult');
+  if (blastResult && blastResult.parentNode && blastResult.parentNode.parentNode) {
+    const blastCard = blastResult.parentNode;
+    blastCard.parentNode.insertBefore(sec, blastCard.nextSibling);
+  } else {
+    main.appendChild(sec);
+  }
   loadBlastHistori(state.bulan);
 }
 
-// Override renderPage to inject blast history after admin page loads
+// Override renderAdmin (async) — inject histori SETELAH render selesai
 (function() {
-  var _origRP2 = window.renderPage;
-  window.renderPage = function() {
-    _origRP2.apply(this, arguments);
-    if (state.page === 'admin') {
-      // Wait for DOM to settle then inject
-      setTimeout(injectBlastHistoriUI, 80);
-    }
-  };
+  var _origRA = window.renderAdmin;
+  if (_origRA) {
+    window.renderAdmin = async function() {
+      await _origRA.call(this);
+      injectBlastHistoriUI();
+    };
+  }
 })();
 
-// Override doBlast to check existing blast history first
+// Override doBlast — cek histori bulan ini sebelum blast
 (function() {
   var _origDoBlast = window.doBlast;
   window.doBlast = async function(hanyaHariIni) {
-    // Check if blast already done this month
     try {
       var check = await api('/api/blast/log/check?bulan=' + state.bulan);
       if (check && check.sudah_blast && check.history && check.history.length > 0) {
         var last = check.history[0];
-        var tgl = last.dibuat_at ? last.dibuat_at.replace('T', ' ').substring(0, 16) : '-';
+        var tgl = last.dibuat_at ? last.dibuat_at.replace('T',' ').substring(0,16) : '-';
         var msg = '⚠️ PERHATIAN!\n\nBlast tagihan bulan ini sudah pernah dilakukan:\n'
           + '📅 ' + tgl + '\n'
-          + '👤 Oleh: ' + (last.dilakukan_oleh || '-') + '\n'
-          + '✅ Terkirim: ' + (last.terkirim || 0) + ' · ❌ Gagal: ' + (last.gagal || 0) + '\n\n'
+          + '👤 Oleh: ' + (last.dilakukan_oleh||'-') + '\n'
+          + '✅ Terkirim: ' + (last.terkirim||0) + ' · ❌ Gagal: ' + (last.gagal||0) + '\n\n'
           + 'Apakah Anda yakin ingin blast lagi?';
         if (!confirm(msg)) return;
       }
-    } catch(e) { /* ignore check error, proceed anyway */ }
+    } catch(e) { /* lanjut jika cek gagal */ }
     if (_origDoBlast) return _origDoBlast.call(this, hanyaHariIni);
   };
 })();
 
-// Override executeBlastRequest to reload history after completion
+// Override executeBlastRequest — refresh histori setelah blast selesai
 (function() {
   var _origExecBlast = window.executeBlastRequest;
   window.executeBlastRequest = async function(updates) {
     if (_origExecBlast) await _origExecBlast.call(this, updates);
-    // Reload blast history
-    setTimeout(function() { loadBlastHistori(state.bulan); }, 500);
+    setTimeout(function() { loadBlastHistori(state.bulan); }, 600);
   };
 })();
 
