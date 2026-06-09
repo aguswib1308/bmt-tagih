@@ -618,6 +618,15 @@ def blast_jt_hari_ini():
             import time as _t
             _t.sleep(max(1, int(get_setting('delay_blast_detik', '10'))))
 
+    # Log blast JT hari ini
+    conn_log = get_db()
+    ensure_blast_log(conn_log)
+    conn_log.execute(
+        "INSERT INTO blast_log (tipe, bulan, dilakukan_oleh, terkirim, gagal, skip, catatan) VALUES (?,?,?,?,?,?,?)",
+        ("blast_jt", bulan, session.get("username", "admin"), terkirim, gagal, skip, "Blast JT Hari Ini")
+    )
+    conn_log.commit()
+    conn_log.close()
     return jsonify({"success": True, "terkirim": terkirim,
                     "gagal": gagal, "skip": skip, "detail": detail})
 
@@ -817,6 +826,16 @@ def execute_blast():
             gagal += 1
         time.sleep(max(1, int(get_setting('delay_blast_detik', '10'))))
 
+    # Log blast ke blast_log
+    conn2 = get_db()
+    ensure_blast_log(conn2)
+    catatan_blast = "Blast Hari Ini" if hanya_hari_ini else "Blast Semua"
+    conn2.execute(
+        "INSERT INTO blast_log (tipe, bulan, dilakukan_oleh, terkirim, gagal, skip, catatan) VALUES (?,?,?,?,?,?,?)",
+        ("execute_blast", bulan, session.get("username", "admin"), terkirim, gagal, 0, catatan_blast)
+    )
+    conn2.commit()
+    conn2.close()
     return jsonify({"success": True, "terkirim": terkirim, "gagal": gagal})
 
 # â”€â”€ UPDATE NO HP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1542,6 +1561,58 @@ def serve_foto_kunjungan(filename):
     from flask import send_from_directory
     import os as _os
     return send_from_directory(_os.path.join(_os.getcwd(), "data/foto_kunjungan"), filename)
+
+
+# ── BLAST LOG ──────────────────────────────────────────────────────────────
+def ensure_blast_log(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS blast_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipe TEXT NOT NULL,
+            bulan TEXT NOT NULL,
+            dilakukan_oleh TEXT,
+            terkirim INTEGER DEFAULT 0,
+            gagal INTEGER DEFAULT 0,
+            skip INTEGER DEFAULT 0,
+            catatan TEXT,
+            dibuat_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+
+@app.route("/api/blast/log")
+@admin_required
+def get_blast_log():
+    conn = get_db()
+    ensure_blast_log(conn)
+    bulan = request.args.get("bulan", "")
+    limit = int(request.args.get("limit", "20"))
+    if bulan:
+        rows = conn.execute(
+            "SELECT * FROM blast_log WHERE bulan=? ORDER BY dibuat_at DESC LIMIT ?",
+            [bulan, limit]
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM blast_log ORDER BY dibuat_at DESC LIMIT ?",
+            [limit]
+        ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/blast/log/check")
+@admin_required
+def check_blast_log():
+    """Cek apakah bulan tertentu sudah pernah di-blast"""
+    conn = get_db()
+    ensure_blast_log(conn)
+    bulan = request.args.get("bulan", datetime.now().strftime("%Y-%m"))
+    rows = conn.execute(
+        "SELECT * FROM blast_log WHERE bulan=? AND tipe='execute_blast' ORDER BY dibuat_at DESC LIMIT 5",
+        [bulan]
+    ).fetchall()
+    conn.close()
+    return jsonify({"sudah_blast": len(rows) > 0, "history": [dict(r) for r in rows]})
 
 def ensure_kunjungan_table(conn):
     conn.execute("""
