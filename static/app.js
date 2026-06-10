@@ -649,7 +649,8 @@ function renderTagihanCard(t) {
         : '<span class="badge badge-red">⏳ BELUM</span>') +
       '<span class="badge badge-gray">JT: ' + (t.tanggal_jt || "-") + '</span>' +
     '</div>' +
-    '<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px;">Pokok: ' + rp(t.tunggakan_pokok) + ' · Margin: ' + rp(t.tunggakan_margin) + '</div>' +
+    (t.saldo_pinjaman ? '<div style="font-size:11px;color:var(--gray-500);margin-bottom:2px;">Sisa Pokok: <b>' + rp(t.saldo_pinjaman) + '</b></div>' : '') +
+    '<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px;">Tunggakan: Pokok ' + rp(t.tunggakan_pokok) + ' · Margin ' + rp(t.tunggakan_margin) + '</div>' +
     '<div class="tagihan-actions">' + bayarBtn + noHpBtn + '</div>' +
     '</div>';
 }
@@ -690,7 +691,8 @@ function openModalBayar(tagihan_id, e) {
     '<div class="info-name">' + t.nama + '</div>' +
     '<div class="info-row">📋 ' + t.no_rekening + ' · ' + (t.marketing_nama || "-") + '</div>' +
     '<div class="info-row">📅 Jatuh tempo: ' + (t.tanggal_jt || "-") + '</div>' +
-    '<div class="info-row" style="margin-top:6px;">Pokok: ' + rp(t.tunggakan_pokok) + ' · Margin: ' + rp(t.tunggakan_margin) + '</div>' +
+    (t.saldo_pinjaman ? '<div class="info-row" style="margin-top:4px;">Sisa Pokok: <b>' + rp(t.saldo_pinjaman) + '</b></div>' : '') +
+    '<div class="info-row" style="margin-top:2px;">Tunggakan: Pokok ' + rp(t.tunggakan_pokok) + ' · Margin ' + rp(t.tunggakan_margin) + '</div>' +
     '<div class="info-total">' + rp(t.total_tagihan) + '</div>';
 
   document.getElementById("inputJumlah").value = parseInt(t.total_tagihan || 0).toLocaleString('id-ID');
@@ -1401,6 +1403,16 @@ async function submitReschedule(no_rekening, is_reschedule) {
     closeModalReschedule();
     renderTagihan();
   }
+}
+// ── XSS Protection ──────────────────────────────────────────────────────
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 // ── XSS Protection ──────────────────────────────────────────────────────
 function esc(s) {
