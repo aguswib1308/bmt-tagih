@@ -61,7 +61,7 @@ def hitung_tunggakan_baru(plafon_pokok, jangka_waktu, sisa_awal, baki_debet,
                     r=_dt.strptime(s,"%Y%m%d")
                     bl=max(0,(today.year-r.year)*12+(today.month-r.month))
             except: pass
-        acc=max(0.0, sa - max(0.0, pp-ap*bl))
+        acc=sa - max(0.0, pp-ap*bl)  # boleh negatif = ada kredit prepay
         sf=0.0
         if tanggal_jt:
             try:
@@ -73,7 +73,7 @@ def hitung_tunggakan_baru(plafon_pokok, jangka_waktu, sisa_awal, baki_debet,
                 if 1<=d<=31 and today.day>=d:
                     sf=max(0.0, ap-max(0.0,sa-bd))
             except: pass
-        return round(acc+sf)
+        return round(max(0.0, acc+sf))  # clip di akhir
     except: return None
 
 
