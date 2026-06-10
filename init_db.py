@@ -389,9 +389,19 @@ def import_excel(filepath, diimport_oleh="admin"):
                 tung_pokok  = 0.0
                 tung_margin = 0.0
             total       = tung_pokok + tung_margin
-            # Pinjaman aktif tapi formula=0 (JT belum lewat): tampilkan angsuran bulan ini
+            # Pinjaman aktif tapi formula=0: tampilkan angsuran HANYA jika JT belum lewat
+            # Jika JT sudah lewat dan formula=0, berarti sudah bayar -> biarkan 0
             if saldo is not None and saldo > 1 and total < 1 and angsuran > 0:
-                total = angsuran
+                jt_day = 31  # default akhir bulan
+                try:
+                    _jts = str(tgl_jt).strip()
+                    if len(_jts) == 8 and _jts.isdigit(): jt_day = int(_jts[6:8])
+                    elif "-" in _jts: jt_day = int(_jts.split("-")[-1])
+                    elif "/" in _jts: jt_day = int(_jts.split("/")[0])
+                    else: jt_day = int(float(_jts))
+                except: pass
+                if datetime.now().day < jt_day:
+                    total = angsuran  # JT belum lewat, tampilkan angsuran
 
             kolek_raw = v(row, COL_KOLEK)
             kolek_manual = 1
