@@ -389,6 +389,9 @@ def import_excel(filepath, diimport_oleh="admin"):
                 tung_pokok  = 0.0
                 tung_margin = 0.0
             total       = tung_pokok + tung_margin
+            # Pinjaman aktif tapi formula=0 (JT belum lewat): tampilkan angsuran bulan ini
+            if saldo is not None and saldo > 1 and total < 1 and angsuran > 0:
+                total = angsuran
 
             kolek_raw = v(row, COL_KOLEK)
             kolek_manual = 1
