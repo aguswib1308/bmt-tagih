@@ -609,6 +609,10 @@ def blast_jt_hari_ini():
         total = row["total_tagihan"] or 0
         if angs > 0:
             actual_tung = max(0, round(total - angs))
+            # Abaikan selisih kecil dari pembulatan formula (<10% angsuran)
+            # agar member jatuh tempo hari ini tidak dapat template "tunggakan"
+            if actual_tung < max(1000, angs * 0.10):
+                actual_tung = 0
             nominal = angs if actual_tung > 0 else total
         else:
             actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
@@ -1522,6 +1526,10 @@ def kirim_reminder_h3():
         total = row["total_tagihan"] or 0
         if angs > 0:
             actual_tung = max(0, round(total - angs))
+            # Abaikan selisih kecil dari pembulatan formula (<10% angsuran)
+            # agar member jatuh tempo hari ini tidak dapat template "tunggakan"
+            if actual_tung < max(1000, angs * 0.10):
+                actual_tung = 0
             nominal = angs if actual_tung > 0 else total
         else:
             actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
