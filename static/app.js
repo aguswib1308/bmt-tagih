@@ -656,6 +656,7 @@ function renderTagihanCard(t) {
 
 function setFilter(status) {
   state.filterStatus = status;
+  state.filterReschedule = "";
   renderTagihan();
 }
 
@@ -666,6 +667,7 @@ function setFilterKolek(k) {
 }
 function setFilterReschedule(k) {
   state.filterReschedule = k;
+  state.filterKolek = "";
   renderTagihan();
 }
 

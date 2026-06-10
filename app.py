@@ -1,8 +1,10 @@
+from werkzeug.utils import secure_filename
 from flask import Flask, request, jsonify, session, render_template, redirect, url_for, send_from_directory, make_response
 import sqlite3
 import hashlib
 import requests
 import os
+import hmac
 import re
 import io
 from PIL import Image
@@ -786,7 +788,6 @@ def preview_blast():
 def get_blast_task(task_id):
     """Cek status background blast task"""
     conn = get_db()
-    ensure_blast_log(conn)
     row = conn.execute(
         "SELECT * FROM blast_tasks WHERE task_id=?", [task_id]
     ).fetchone()
@@ -815,13 +816,13 @@ def execute_blast():
     where = "WHERE t.bulan=? AND t.status='BELUM' AND n.no_hp IS NOT NULL AND n.no_hp != '' AND t.kolektibilitas IN (1,2) AND (n.is_reschedule=0 OR n.is_reschedule IS NULL)"
     params = [bulan]
 
-    rows = conn.execute(f"""
+    rows = [dict(r) for r in conn.execute(f"""
         SELECT t.id, t.no_rekening, t.total_tagihan, t.tunggakan_pokok, t.tunggakan_margin,
                t.angsuran_per_bulan,
                n.nama, n.no_hp, n.marketing_nama, n.tanggal_jt
         FROM tagihan t JOIN nasabah n ON t.no_rekening = n.no_rekening
         {where}
-    """, params).fetchall()
+    """, params).fetchall()]
     conn.close()
 
     import uuid as _uuid
@@ -983,14 +984,15 @@ def import_excel_auto():
         return jsonify({"error": "Server belum dikonfigurasi token"}), 500
 
     req_token = request.headers.get('X-BMT-Token', '').strip()
-    if not req_token or req_token != valid_token:
+    if not req_token or not hmac.compare_digest(req_token, valid_token):
         return jsonify({"error": "Token tidak valid"}), 403
 
     if "file" not in request.files:
         return jsonify({"error": "File tidak ditemukan"}), 400
 
     f        = request.files["file"]
-    filepath = f"data/upload_{f.filename}"
+    safe_fn  = secure_filename(f.filename) or "upload.xlsx"
+    filepath = os.path.join(os.path.dirname(__file__), "data", f"upload_{safe_fn}")
     f.save(filepath)
 
     from init_db import import_excel
@@ -1008,7 +1010,8 @@ def import_excel_route():
         return jsonify({"error": "File tidak ditemukan"}), 400
 
     f        = request.files["file"]
-    filepath = f"data/upload_{f.filename}"
+    safe_fn  = secure_filename(f.filename) or "upload.xlsx"
+    filepath = os.path.join(os.path.dirname(__file__), "data", f"upload_{safe_fn}")
     f.save(filepath)
 
     from init_db import import_excel
@@ -1142,11 +1145,20 @@ def index(path=""):
 # â”€â”€ STARTUP: init DB kalau belum ada â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def startup():
     if not os.path.exists(DB_PATH):
-        print("ðŸ”§ Database belum ada, menjalankan init_db...")
+        print("\U0001f527 Database belum ada, menjalankan init_db...")
         from init_db import init_db
         init_db()
     else:
-        print("âœ… Database ditemukan, skip init.")
+        print("\u2705 Database ditemukan, skip init.")
+    # Pastikan tabel blast_log/blast_tasks ada, dan reset stuck tasks
+    try:
+        _sc = get_db()
+        ensure_blast_log(_sc)
+        _sc.execute("UPDATE blast_tasks SET status='interrupted', catatan='App restart' WHERE status='running'")
+        _sc.commit()
+        _sc.close()
+    except Exception:
+        pass
 
 startup()
 
