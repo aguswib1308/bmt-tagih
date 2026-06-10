@@ -607,16 +607,14 @@ def blast_jt_hari_ini():
         tgl = format_tgl_jt(row["tanggal_jt"])
         angs = row["angsuran_per_bulan"] or 0
         total = row["total_tagihan"] or 0
-        if angs > 0:
-            actual_tung = max(0, round(total - angs))
-            # Abaikan selisih kecil dari pembulatan formula (<10% angsuran)
-            # agar member jatuh tempo hari ini tidak dapat template "tunggakan"
-            if actual_tung < max(1000, angs * 0.10):
-                actual_tung = 0
-            nominal = angs if actual_tung > 0 else total
+        # Formula baru: total_tagihan = tunggakan_pokok + tunggakan_margin
+        # <= 1 angsuran = tagihan bulan ini (lancar), > 1 angsuran = ada tunggakan
+        if angs > 0 and total > angs + max(1000, angs * 0.10):
+            actual_tung = round(total - angs)
+            nominal = angs
         else:
-            actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
-            nominal = total
+            actual_tung = 0
+            nominal = round(total)
         pesan = pesan_tagihan(row["nama"], nominal, tgl, row["marketing_nama"],
                               no_akad=row["no_rekening"], tunggakan=actual_tung)
         result = kirim_wa(row["no_hp"], pesan)
@@ -738,12 +736,18 @@ def kirim_reminder(tagihan_id):
     tgl = format_tgl_jt(row["tanggal_jt"])
     angs_pb = row["angsuran_per_bulan"] or 0
     total_th = row["total_tagihan"] or 0
-    if angs_pb > 0:
-        actual_tung = max(0, round(total_th - angs_pb))
-        nominal_pesan = angs_pb if actual_tung > 0 else total_th
+
+    # Jika tagihan = 0, tidak perlu kirim WA
+    if total_th < 1:
+        return jsonify({"error": "Tagihan Rp 0 — tidak perlu kirim WA"}), 400
+
+    # Formula baru: total > 1 angsuran = ada tunggakan lama
+    if angs_pb > 0 and total_th > angs_pb + max(1000, angs_pb * 0.10):
+        actual_tung = round(total_th - angs_pb)
+        nominal_pesan = angs_pb
     else:
-        actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
-        nominal_pesan = total_th
+        actual_tung = 0
+        nominal_pesan = round(total_th)
     pesan = pesan_tagihan(row["nama"], nominal_pesan, tgl, row["marketing_nama"], no_akad=row["no_rekening"], tunggakan=actual_tung)
     result = kirim_wa(row["no_hp"], pesan)
     return jsonify({"success": True, "wa_result": result})
@@ -859,12 +863,13 @@ def execute_blast():
 
                 angs_pb = row["angsuran_per_bulan"] or 0
                 total_th = row["total_tagihan"] or 0
-                if angs_pb > 0:
-                    actual_tung = max(0, round(total_th - angs_pb))
-                    nominal_pesan = angs_pb if actual_tung > 0 else total_th
+                # Formula baru: total > 1 angsuran = ada tunggakan lama
+                if angs_pb > 0 and total_th > angs_pb + max(1000, angs_pb * 0.10):
+                    actual_tung = round(total_th - angs_pb)
+                    nominal_pesan = angs_pb
                 else:
-                    actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
-                    nominal_pesan = total_th
+                    actual_tung = 0
+                    nominal_pesan = round(total_th)
 
                 pesan = pesan_tagihan(row["nama"], nominal_pesan, tgl, row["marketing_nama"],
                                       no_akad=row["no_rekening"], tunggakan=actual_tung)
@@ -1524,16 +1529,13 @@ def kirim_reminder_h3():
             skip += 1; continue
         angs = row["angsuran_per_bulan"] or 0
         total = row["total_tagihan"] or 0
-        if angs > 0:
-            actual_tung = max(0, round(total - angs))
-            # Abaikan selisih kecil dari pembulatan formula (<10% angsuran)
-            # agar member jatuh tempo hari ini tidak dapat template "tunggakan"
-            if actual_tung < max(1000, angs * 0.10):
-                actual_tung = 0
-            nominal = angs if actual_tung > 0 else total
+        # Formula baru: total > 1 angsuran = ada tunggakan lama
+        if angs > 0 and total > angs + max(1000, angs * 0.10):
+            actual_tung = round(total - angs)
+            nominal = angs
         else:
-            actual_tung = (row["tunggakan_pokok"] or 0) + (row["tunggakan_margin"] or 0)
-            nominal = total
+            actual_tung = 0
+            nominal = round(total)
         tgl_fmt = format_tgl_jt(row["tanggal_jt"])
         pesan = pesan_tagihan(row["nama"], nominal, tgl_fmt, row["marketing_nama"],
                               no_akad=row["no_rekening"], tunggakan=actual_tung)

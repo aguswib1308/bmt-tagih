@@ -53,45 +53,54 @@ def hitung_kol(tunggakan_pokok, angsuran_per_bulan, kol_manual=1):
 def hitung_tunggakan_baru(plafon_pokok, jangka_waktu, sisa_awal, baki_debet,
                            tgl_realisasi, tanggal_jt,
                            angsuran_pokok_excel=None, mutasi_pokok_excel=None):
+    """Hitung tunggakan pokok - formula sederhana:
+    1. sudah_bayar = plafond_pokok - bakidebet
+    2. angsuran_pokok = dari Excel atau plafond/jangka_waktu
+    3. bulan_angsuran = bulan sekarang - bulan realisasi
+    4. seharusnya_bayar = angsuran_pokok x bulan_angsuran
+    5. tunggakan = max(0, seharusnya - sudah_bayar)
+    """
     try:
-        pp=float(plafon_pokok or 0); jw=int(float(jangka_waktu or 0))
-        sa=float(sisa_awal or 0);   bd=float(baki_debet or 0)
-        # Gunakan angsuran_pokok dari Excel jika tersedia (lebih akurat)
+        pp = float(plafon_pokok or 0)
+        jw = int(float(jangka_waktu or 0))
+        bd = float(baki_debet or 0)
+
+        # Angsuran pokok per bulan
         if angsuran_pokok_excel and float(angsuran_pokok_excel) > 0:
             ap = float(angsuran_pokok_excel)
         elif pp > 0 and jw > 0:
             ap = pp / jw
         else:
             return None
-        today=__import__("datetime").datetime.now()
-        bl=0
+
+        # Hitung bulan sejak realisasi = jumlah angsuran yg seharusnya sudah dibayar
+        # Ketentuan: angsuran 1 = 1 bulan setelah realisasi
+        from datetime import datetime as _dt
+        today = _dt.now()
+        bulan_angsuran = 0
         if tgl_realisasi:
             try:
-                s=str(tgl_realisasi).replace("-","").replace("/","").strip()
-                if len(s)==8:
-                    from datetime import datetime as _dt
-                    r=_dt.strptime(s,"%Y%m%d")
-                    bl=max(0,(today.year-r.year)*12+(today.month-r.month))
-            except: pass
-        acc=sa - max(0.0, pp-ap*max(0, bl-1))  # bl-1 karena sisa_awal=posisi awal bulan, baru bl-1 angsuran yang jatuh tempo
-        sf=0.0
-        if tanggal_jt:
-            try:
-                s=str(tanggal_jt).strip()
-                if len(s)==8 and s.isdigit(): d=int(s[6:8])
-                elif "-" in s: d=int(s.split("-")[-1])
-                elif "/" in s: d=int(s.split("/")[0])
-                else: d=int(float(s))
-                if 1<=d<=31 and today.day>=d:
-                    # Gunakan mutasi_pokok dari Excel jika ada (lebih presisi)
-                    if mutasi_pokok_excel is not None and float(mutasi_pokok_excel) >= 0:
-                        bayar=float(mutasi_pokok_excel)
-                    else:
-                        bayar=max(0.0,sa-bd)
-                    sf=max(0.0, ap-bayar)
-            except: pass
-        return round(max(0.0, acc+sf))  # clip di akhir
-    except: return None
+                sr = str(tgl_realisasi).replace("-","").replace("/","").strip()
+                if len(sr) >= 8:
+                    sr = sr[:8]
+                    r = _dt.strptime(sr, "%Y%m%d")
+                    bulan_angsuran = max(0, (today.year - r.year) * 12 + (today.month - r.month))
+            except:
+                pass
+
+        # Total yang sudah dibayar sepanjang masa pinjaman
+        sudah_bayar = max(0.0, pp - bd)
+
+        # Total yang seharusnya sudah dibayar sampai bulan ini
+        # Cap di plafond (jika bulan > jangka_waktu, tidak melebihi plafond)
+        seharusnya_bayar = min(ap * bulan_angsuran, pp)
+
+        # Tunggakan = selisih (clip to 0)
+        tunggakan = max(0.0, seharusnya_bayar - sudah_bayar)
+
+        return round(tunggakan)
+    except:
+        return None
 
 
 def init_db():
@@ -253,6 +262,10 @@ def import_excel(filepath, diimport_oleh="admin"):
         COL_JK_WAKTU   = find_col(df, ['jangka_waktu','jangkawaktu','jk_waktu','tenor','jangka waktu'])
         COL_ANGS_POK   = find_col(df, ['angsuran_pokok','angs_pokok'])
         COL_MUTASI_POK = find_col(df, ['mutasi_pokok','mutasi pokok'])
+        COL_PLAF_MAR   = find_col(df, ['plafond_margin','plafon_margin','plafond margin'])
+        COL_SISA_MAR   = find_col(df, ['sisa_margin','sisa margin'])
+        COL_ANGS_MAR   = find_col(df, ['angsuran_margin','angs_margin'])
+        COL_MUTASI_MAR = find_col(df, ['mutasi_margin','mutasi margin'])
         COL_KOLEK      = find_col(df, ['kolek','kolektibilitas','kol'])
         COL_TGL_BAYAR    = find_col(df, ['tgl_bayar','tanggal_bayar','tgl bayar'])
         COL_REALISASI    = find_col(df, ['tgl_realisasi','tanggal_realisasi','realisasi'])
@@ -261,6 +274,7 @@ def import_excel(filepath, diimport_oleh="admin"):
         print(f"Mapping: rek={COL_REK} nama={COL_NAMA} hp={COL_HP} mkt={COL_MKT_ID}")
         print(f"  saldo={COL_SALDO} plafond={COL_PLAFOND} sisa_awal={COL_SISA_AWAL} jk_waktu={COL_JK_WAKTU}")
         print(f"  t_pok={COL_T_POK} t_mar={COL_T_MAR} kolek={COL_KOLEK} realisasi={COL_REALISASI}")
+        print(f"  plaf_mar={COL_PLAF_MAR} sisa_mar={COL_SISA_MAR} angs_mar={COL_ANGS_MAR} mut_mar={COL_MUTASI_MAR}")
         if COL_SISA_AWAL and COL_JK_WAKTU:
             print("  [INFO] Formula tunggakan BARU aktif (sisa_awal + jangka_waktu ditemukan)")
         else:
@@ -369,11 +383,11 @@ def import_excel(filepath, diimport_oleh="admin"):
 
             # Nilai tagihan
             saldo       = n(row, COL_SALDO)
-            tung_margin = n(row, COL_T_MAR)
             angsuran    = n(row, COL_ANGS)
             plafond     = n(row, COL_PLAFOND)
             tgl_bayar   = v(row, COL_TGL_BAYAR)
-            # Hitung tunggakan pokok: formula baru atau fallback ke kolom Excel
+
+            # --- Hitung tunggakan POKOK: formula baru ---
             tung_pokok = None
             if COL_SISA_AWAL and (COL_JK_WAKTU or COL_ANGS_POK):
                 tung_pokok = hitung_tunggakan_baru(
@@ -384,24 +398,24 @@ def import_excel(filepath, diimport_oleh="admin"):
                     mutasi_pokok_excel=n(row,COL_MUTASI_POK) if COL_MUTASI_POK else None)
             if tung_pokok is None:
                 tung_pokok = n(row, COL_T_POK)
+
+            # --- Hitung tunggakan MARGIN: formula yang sama ---
+            tung_margin = None
+            if COL_PLAF_MAR and COL_SISA_MAR and (COL_JK_WAKTU or COL_ANGS_MAR):
+                sisa_mar = n(row, COL_SISA_MAR)
+                tung_margin = hitung_tunggakan_baru(
+                    plafon_pokok=n(row,COL_PLAF_MAR), jangka_waktu=n(row,COL_JK_WAKTU),
+                    sisa_awal=sisa_mar, baki_debet=sisa_mar,
+                    tgl_realisasi=tgl_realisasi, tanggal_jt=tgl_jt,
+                    angsuran_pokok_excel=n(row,COL_ANGS_MAR) if COL_ANGS_MAR else None,
+                    mutasi_pokok_excel=n(row,COL_MUTASI_MAR) if COL_MUTASI_MAR else None)
+            if tung_margin is None:
+                tung_margin = n(row, COL_T_MAR)
             # Jika baki_debet < 1, pinjaman sudah lunas -- override tunggakan ke 0
             if saldo is not None and saldo < 1:
                 tung_pokok  = 0.0
                 tung_margin = 0.0
             total       = tung_pokok + tung_margin
-            # Pinjaman aktif tapi formula=0: tampilkan angsuran HANYA jika JT belum lewat
-            # Jika JT sudah lewat dan formula=0, berarti sudah bayar -> biarkan 0
-            if saldo is not None and saldo > 1 and total < 1 and angsuran > 0:
-                jt_day = 31  # default akhir bulan
-                try:
-                    _jts = str(tgl_jt).strip()
-                    if len(_jts) == 8 and _jts.isdigit(): jt_day = int(_jts[6:8])
-                    elif "-" in _jts: jt_day = int(_jts.split("-")[-1])
-                    elif "/" in _jts: jt_day = int(_jts.split("/")[0])
-                    else: jt_day = int(float(_jts))
-                except: pass
-                if datetime.now().day < jt_day:
-                    total = angsuran  # JT belum lewat, tampilkan angsuran
 
             kolek_raw = v(row, COL_KOLEK)
             kolek_manual = 1
