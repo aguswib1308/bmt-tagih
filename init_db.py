@@ -384,8 +384,8 @@ def import_excel(filepath, diimport_oleh="admin"):
                     mutasi_pokok_excel=n(row,COL_MUTASI_POK) if COL_MUTASI_POK else None)
             if tung_pokok is None:
                 tung_pokok = n(row, COL_T_POK)
-            # Jika baki_debet = 0, pinjaman sudah lunas -- override tunggakan ke 0
-            if saldo == 0:
+            # Jika baki_debet < 1, pinjaman sudah lunas -- override tunggakan ke 0
+            if saldo is not None and saldo < 1:
                 tung_pokok  = 0.0
                 tung_margin = 0.0
             total       = tung_pokok + tung_margin
