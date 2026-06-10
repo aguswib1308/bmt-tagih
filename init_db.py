@@ -386,10 +386,9 @@ def import_excel(filepath, diimport_oleh="admin"):
                     kolek_manual = max(1, min(5, kolek_manual))
                 except:
                     kolek_manual = 1
-            # Hitung kolektibilitas otomatis berdasarkan bulan tunggakan
-            tung_pok_val = tung_pokok if tung_pokok else 0
-            angs_val     = angsuran if angsuran else 0
-            kolek = hitung_kol(tung_pok_val, angs_val, kolek_manual)
+            # Gunakan kolektibilitas langsung dari MESPro (Excel)
+            # Formula tunggakan hanya untuk nominal tagihan, bukan klasifikasi risiko
+            kolek = kolek_manual
 
             # UPSERT tagihan
             existing_t = conn.execute(
