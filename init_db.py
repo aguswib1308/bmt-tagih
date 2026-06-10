@@ -45,6 +45,38 @@ def hitung_kol(tunggakan_pokok, angsuran_per_bulan, kol_manual=1):
     return max(kol_auto, kol_manual)
 
 
+def hitung_tunggakan_baru(plafon_pokok, jangka_waktu, sisa_awal, baki_debet,
+                           tgl_realisasi, tanggal_jt):
+    try:
+        pp=float(plafon_pokok or 0); jw=int(float(jangka_waktu or 0))
+        sa=float(sisa_awal or 0);   bd=float(baki_debet or 0)
+        if pp<=0 or jw<=0: return None
+        ap=pp/jw; today=__import__("datetime").datetime.now()
+        bl=0
+        if tgl_realisasi:
+            try:
+                s=str(tgl_realisasi).replace("-","").replace("/","").strip()
+                if len(s)==8:
+                    from datetime import datetime as _dt
+                    r=_dt.strptime(s,"%Y%m%d")
+                    bl=max(0,(today.year-r.year)*12+(today.month-r.month))
+            except: pass
+        acc=max(0.0, sa - max(0.0, pp-ap*bl))
+        sf=0.0
+        if tanggal_jt:
+            try:
+                s=str(tanggal_jt).strip()
+                if len(s)==8 and s.isdigit(): d=int(s[6:8])
+                elif "-" in s: d=int(s.split("-")[-1])
+                elif "/" in s: d=int(s.split("/")[0])
+                else: d=int(float(s))
+                if 1<=d<=31 and today.day>=d:
+                    sf=max(0.0, ap-max(0.0,sa-bd))
+            except: pass
+        return round(acc+sf)
+    except: return None
+
+
 def init_db():
     os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -196,13 +228,21 @@ def import_excel(filepath, diimport_oleh="admin"):
         COL_T_POK   = find_col(df, ['tunggak_pokok','tunggakan_pokok','t_pokok','tunggak pokok'])
         COL_T_MAR   = find_col(df, ['tunggak_margin','tunggakan_margin','t_margin','tunggak margin'])
         COL_ANGS    = find_col(df, ['angsuran_per_bulan','angsuran','angs_per_bulan','angsuran per bulan'])
-        COL_PLAFOND = find_col(df, ['plafond_pokok','plafond'])
-        COL_KOLEK   = find_col(df, ['kolek','kolektibilitas','kol'])
+        COL_PLAFOND   = find_col(df, ['plafond_pokok','plafond','plafon_pokok','plafon'])
+        COL_SISA_AWAL = find_col(df, ['sisa_awal','sisa awal','sisa_pokok_awal','sisaawal'])
+        COL_JK_WAKTU  = find_col(df, ['jangka_waktu','jangkawaktu','jk_waktu','tenor','jangka waktu'])
+        COL_KOLEK     = find_col(df, ['kolek','kolektibilitas','kol'])
         COL_TGL_BAYAR    = find_col(df, ['tgl_bayar','tanggal_bayar','tgl bayar'])
         COL_REALISASI    = find_col(df, ['tgl_realisasi','tanggal_realisasi','realisasi'])
         COL_RESCHEDULE   = find_col(df, ['is_reschedule','reschedule','rescheduled'])
 
-        print(f"Mapping: rek={COL_REK} nama={COL_NAMA} hp={COL_HP} mkt={COL_MKT_ID} saldo={COL_SALDO} t_pok={COL_T_POK} t_mar={COL_T_MAR} kolek={COL_KOLEK}")
+        print(f"Mapping: rek={COL_REK} nama={COL_NAMA} hp={COL_HP} mkt={COL_MKT_ID}")
+        print(f"  saldo={COL_SALDO} plafond={COL_PLAFOND} sisa_awal={COL_SISA_AWAL} jk_waktu={COL_JK_WAKTU}")
+        print(f"  t_pok={COL_T_POK} t_mar={COL_T_MAR} kolek={COL_KOLEK} realisasi={COL_REALISASI}")
+        if COL_SISA_AWAL and COL_JK_WAKTU:
+            print("  [INFO] Formula tunggakan BARU aktif (sisa_awal + jangka_waktu ditemukan)")
+        else:
+            print("  [INFO] Formula tunggakan LAMA aktif (fallback ke kolom Excel)")
 
         # Deteksi bulan dari nama file
         import re
@@ -307,12 +347,20 @@ def import_excel(filepath, diimport_oleh="admin"):
 
             # Nilai tagihan
             saldo       = n(row, COL_SALDO)
-            tung_pokok  = n(row, COL_T_POK)
             tung_margin = n(row, COL_T_MAR)
-            total       = tung_pokok + tung_margin
             angsuran    = n(row, COL_ANGS)
             plafond     = n(row, COL_PLAFOND)
             tgl_bayar   = v(row, COL_TGL_BAYAR)
+            # Hitung tunggakan pokok: formula baru atau fallback ke kolom Excel
+            tung_pokok = None
+            if COL_SISA_AWAL and COL_JK_WAKTU:
+                tung_pokok = hitung_tunggakan_baru(
+                    plafon_pokok=n(row,COL_PLAFOND), jangka_waktu=n(row,COL_JK_WAKTU),
+                    sisa_awal=n(row,COL_SISA_AWAL), baki_debet=saldo,
+                    tgl_realisasi=tgl_realisasi, tanggal_jt=tgl_jt)
+            if tung_pokok is None:
+                tung_pokok = n(row, COL_T_POK)
+            total       = tung_pokok + tung_margin
 
             kolek_raw = v(row, COL_KOLEK)
             kolek_manual = 1
