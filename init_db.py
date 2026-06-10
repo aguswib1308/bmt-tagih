@@ -27,23 +27,28 @@ KODE_AO = {
 
 
 def hitung_kol(tunggakan_pokok, angsuran_per_bulan, kol_manual=1):
-    """Hitung kolektibilitas otomatis dari bulan tunggakan.
-    Kol1=<1bln, Kol2=1-3bln, Kol3=3-6bln, Kol4=6-12bln, Kol5=>12bln.
+    """Hitung kolektibilitas otomatis berdasarkan hari keterlambatan (DPD).
+    Sesuai Permenkop UKM No.13/2015 dan No.8/2023 untuk KSP/USP koperasi:
+      Kol1 Lancar         = 0 hari
+      Kol2 DPK            = 1-90 hari
+      Kol3 Kurang Lancar  = 91-120 hari
+      Kol4 Diragukan      = 121-180 hari
+      Kol5 Macet          = >180 hari
+    Konversi: 1 bulan angsuran = 30 hari.
     Mengambil nilai MAX(otomatis, manual) agar tidak auto-downgrade.
     """
     tung = tunggakan_pokok or 0
     angs = angsuran_per_bulan or 0
     if angs > 0 and tung > 0:
-        bln = tung / angs
-        if bln < 1:    kol_auto = 1
-        elif bln < 3:  kol_auto = 2
-        elif bln < 6:  kol_auto = 3
-        elif bln < 12: kol_auto = 4
-        else:          kol_auto = 5
+        hari = (tung / angs) * 30
+        if hari <= 0:     kol_auto = 1
+        elif hari <= 90:  kol_auto = 2
+        elif hari <= 120: kol_auto = 3
+        elif hari <= 180: kol_auto = 4
+        else:             kol_auto = 5
     else:
         kol_auto = 1 if tung <= 0 else kol_manual
     return max(kol_auto, kol_manual)
-
 
 def hitung_tunggakan_baru(plafon_pokok, jangka_waktu, sisa_awal, baki_debet,
                            tgl_realisasi, tanggal_jt,
