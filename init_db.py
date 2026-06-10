@@ -73,7 +73,7 @@ def hitung_tunggakan_baru(plafon_pokok, jangka_waktu, sisa_awal, baki_debet,
                     r=_dt.strptime(s,"%Y%m%d")
                     bl=max(0,(today.year-r.year)*12+(today.month-r.month))
             except: pass
-        acc=sa - max(0.0, pp-ap*bl)  # boleh negatif = ada kredit prepay
+        acc=sa - max(0.0, pp-ap*max(0, bl-1))  # bl-1 karena sisa_awal=posisi awal bulan, baru bl-1 angsuran yang jatuh tempo
         sf=0.0
         if tanggal_jt:
             try:
