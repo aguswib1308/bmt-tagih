@@ -229,9 +229,12 @@ def import_excel(filepath, diimport_oleh="admin"):
         print("Kolom ditemukan:", list(df.columns))
 
         def find_col(df, candidates):
+            # Normalize kolom df: lowercase + strip spasi
+            col_map = {str(c).strip().lower(): c for c in df.columns}
             for c in candidates:
-                if c in df.columns:
-                    return c
+                key = c.strip().lower()
+                if key in col_map:
+                    return col_map[key]  # kembalikan nama kolom asli di df
             return None
 
         COL_REK     = find_col(df, ['no_rekening','norek','no_rek','rekening'])
