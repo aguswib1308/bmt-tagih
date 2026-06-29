@@ -123,12 +123,21 @@ def selaraskan_tunggakan_berjalan(tung_pokok, tung_margin, plafond, sisa_ak,
     """
     tp = float(tung_pokok or 0); tm = float(tung_margin or 0)
     ap = float(ang_pokok or 0); ang = float(angsuran or 0)
+    plaf = float(plafond or 0); sisa = float(sisa_ak or 0)
     base = tp + tm
-    # Guard: butuh jadwal valid & belum lewat tenor (samakan dgn hitung_tunggakan_jadwal)
-    if ap <= 0 or ang <= 0 or not jw or jw <= 0 or n_due is None or n_due > jw:
+    # Guard: HANYA untuk pinjaman amortisasi bulanan yang wajar. Bila tidak,
+    # pakai nilai MESPro apa adanya (jangan fabrikasi dari jadwal). Lewati bila:
+    #  - ang/ap/plafond tak valid
+    #  - ap > ang (pokok per bln > total angsuran -> mustahil utk amortisasi)
+    #  - ang >= plafond (angsuran bulanan >= seluruh plafond -> pinjaman bullet/
+    #    musiman/janggal; jadwal bulanan tidak berlaku & akan meledak bila dipaksa)
+    #  - jadwal tak relevan (loan tempo / tenor lewat / n_due tak terhitung)
+    if (ap <= 0 or ang <= 0 or plaf <= 0 or ap > ang or ang >= plaf
+            or not jw or jw <= 0 or n_due is None or n_due > jw):
         return (tp, tm, base)
-    # Jumlah angsuran tertunggak menurut JADWAL
-    paid_inst = round((float(plafond or 0) - float(sisa_ak or 0)) / ap)
+    # Jumlah angsuran tertunggak menurut JADWAL (paid_inst di-clamp >= 0 untuk
+    # jaga-jaga data janggal sisa_ak > plafond)
+    paid_inst = max(0, round((plaf - sisa) / ap))
     behind_sched = max(0, min(n_due, jw) - paid_inst)
     # Jumlah angsuran tertunggak menurut MESPro saat ini
     behind_mespro = round(base / ang)
@@ -136,6 +145,7 @@ def selaraskan_tunggakan_berjalan(tung_pokok, tung_margin, plafond, sisa_ak,
     if kurang <= 0:
         return (tp, tm, base)
     margin_per = max(0.0, ang - ap)
-    tp += kurang * ap
-    tm += kurang * margin_per
+    # Pokok tertunggak tak mungkin melebihi sisa pokok (invariant pengaman)
+    tp = min(tp + kurang * ap, sisa)
+    tm = tm + kurang * margin_per
     return (round(tp), round(tm), round(tp + tm))
