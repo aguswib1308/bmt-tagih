@@ -141,7 +141,7 @@ def format_tgl_jt(tgl_str):
     if m: return m.group(1)
     m = re.search(r'\b(\d{1,2})$', tgl_str)
     if m: return m.group(1)
-    return tgl_st
+    return tgl_str
 
 def get_setting(key, default=None):
     """Ambil satu nilai dari tabel app_settings."""
@@ -476,7 +476,7 @@ def dashboard():
             SUM(CASE WHEN (t.status IN ('LUNAS','SUDAH_BAYAR')) THEN t.angsuran_per_bulan ELSE 0 END) as total_terkumpul,
             SUM(CASE WHEN t.status='BELUM' AND t.total_tagihan >= 1 THEN t.total_tagihan ELSE 0 END) as total_tunggakan,
             SUM(CASE WHEN (t.status IN ('LUNAS','SUDAH_BAYAR')) THEN 1 ELSE 0 END) as sudah_bayar,
-            SUM(CASE WHEN (t.status='BELUM') THEN 1 ELSE 0 END) as belum_baya
+            SUM(CASE WHEN (t.status='BELUM') THEN 1 ELSE 0 END) as belum_bayar
         FROM tagihan t
         JOIN nasabah n ON t.no_rekening = n.no_rekening
         {where}
@@ -661,7 +661,7 @@ def tagihan_jatuh_tempo():
 def _run_sync_mespro(timeout=120):
     """Jalankan sync_mespro.py sebagai subprocess. Return dict hasil.
     Dipakai endpoint sync manual & auto-sync sebelum blast WA.
-    Bila gagal (mis. tunnel MESPro mati), kembalikan ok=False -- calle
+    Bila gagal (mis. tunnel MESPro mati), kembalikan ok=False -- caller
     boleh memutuskan tetap lanjut pakai data terakhir."""
     import subprocess, re as _re
     try:
@@ -671,7 +671,7 @@ def _run_sync_mespro(timeout=120):
             capture_output=True, text=True, timeout=timeout,
             cwd=os.path.dirname(__file__)
         )
-        output = result.stdout + result.stder
+        output = result.stdout + result.stderr
         if result.returncode != 0:
             return {"ok": False, "error": "Sync gagal", "detail": output[-500:]}
         m_baru  = _re.search(r"Baru\s*:\s*(\d+)", output)
@@ -939,7 +939,7 @@ def preview_blast():
     lancar = []
     bermasalah = []
     hari_ini_str = datetime.now().strftime("%d")
-    hari_ini_str_alt = hari_ini_str[1:] if hari_ini_str.startswith("0") else hari_ini_st
+    hari_ini_str_alt = hari_ini_str[1:] if hari_ini_str.startswith("0") else hari_ini_str
 
     for r in rows:
         d = dict(r)
@@ -1022,7 +1022,7 @@ def execute_blast():
     def _do_blast_bg(rows_copy, bulan_copy, hanya_hari_ini_copy, task_id_copy, username_copy, catatan_copy):
         terkirim = gagal = 0
         hari_ini_str = datetime.now().strftime("%d")
-        hari_ini_str_alt = hari_ini_str[1:] if hari_ini_str.startswith("0") else hari_ini_st
+        hari_ini_str_alt = hari_ini_str[1:] if hari_ini_str.startswith("0") else hari_ini_str
         try:
             for row in rows_copy:
                 tgl = format_tgl_jt(row["tanggal_jt"])
@@ -1272,7 +1272,7 @@ Sholawat dan salam semoga tetap tercurahkan kepada nabi Muhammad saw, sahabat da
 Mohon maaf, mengingatkan bahwa angsuran bpk/ibu di bulan ini sudah jatuh tempo pada tanggal {jatuh_tempo} dengan No akad : {no_akad} , sebesar : {total}
 
 Pembayaran bisa dilakukan dengan :
-1.	Bayar tunai di kanto
+1.	Bayar tunai di kantor
 2.	Potong tabungan
 3.	Transfer ke bank :
 ✅ BSI no rek. 7778880231 an. KSPPS BMT AMAL MUSLIM
@@ -1297,7 +1297,7 @@ Sholawat dan salam semoga tetap tercurahkan kepada nabi Muhammad saw, sahabat da
 Mohon maaf, mengingatkan bahwa angsuran bpk/ibu di bulan ini sudah jatuh tempo tanggal {jatuh_tempo} dengan No akad : {no_akad} , sebesar : {total} dan tunggakan angsuran bulan sebelumnya {tunggakan} Jumlah Total {total_keseluruhan}
 
 Pembayaran bisa dilakukan dengan :
-1.	Bayar tunai di kanto
+1.	Bayar tunai di kantor
 2.	Potong tabungan
 3.	Transfer ke bank :
 ✅ BSI no rek. 7778880231 an. KSPPS BMT AMAL MUSLIM
@@ -2466,7 +2466,7 @@ def kunjungan_rekap_export_xlsx():
 
     import openpyxl, io as _io
     from openpyxl.styles import Font, PatternFill, Alignment
-    from openpyxl.utils import get_column_lette
+    from openpyxl.utils import get_column_letter
     KL = ["", "Lancar", "DPK", "Kurang Lancar", "Diragukan", "Macet"]
     wb = openpyxl.Workbook()
     ws = wb.active

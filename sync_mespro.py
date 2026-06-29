@@ -4,7 +4,7 @@ Database: bmt_amw_01 (read-only via user reportamw)
 Tunnel: SSH reverse tunnel port 13306
 
 Jalankan: venv/bin/python3 sync_mespro.py
-Discover: venv/bin/python3 sync_mespro.py --discove
+Discover: venv/bin/python3 sync_mespro.py --discover
 """
 import sqlite3, json, os, sys
 from datetime import datetime
@@ -284,7 +284,7 @@ def _read_state():
 
 def write_sync_state(status, total_query=0, ins=0, upd=0, skip=0, fixed=0, error=""):
     """Simpan status sync TERAKHIR ke data/sync_state.json. Selalu di-update
-    tiap run (termasuk run cron 10 menit yang 0 perubahan), jadi inilah sumbe
+    tiap run (termasuk run cron 10 menit yang 0 perubahan), jadi inilah sumber
     kebenaran 'kapan sync terakhir & berhasil/gagal' -- bukan import_log."""
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
